@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diff Tool — Compare Text / JSON</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --add-bg: rgba(46, 160, 67, 0.18);
+    --add-strong: rgba(46, 160, 67, 0.45);
+    --del-bg: rgba(248, 81, 73, 0.18);
+    --del-strong: rgba(248, 81, 73, 0.45);
+    --mono: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 20px; font-weight: 600; }
+  h1 span { color: var(--accent); }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  select, button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  select:hover, button:hover { border-color: var(--accent); }
+  label.checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  label.checkbox input { accent-color: var(--accent); cursor: pointer; }
+  button.primary {
+    background: #238636;
+    border-color: #2ea043;
+    font-weight: 600;
+  }
+  button.primary:hover { background: #2ea043; }
+  .inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .pane {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .pane-header .status { font-size: 12px; }
+  .status.ok { color: #3fb950; }
+  .status.err { color: #f85149; }
+  textarea {
+    width: 100%;
+    height: 220px;
+    background: transparent;
+    color: var(--text);
+    border: none;
+    outline: none;
+    resize: vertical;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    tab-size: 2;
+  }
+  .stats {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 13px;
+    min-height: 20px;
+  }
+  .stats .added { color: #3fb950; }
+  .stats .removed { color: #f85149; }
+  .stats .same-msg { color: var(--muted); }
+  #result { display: none; }
+  .diff-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .diff-grid.unified { grid-template-columns: 1fr; }
+  .diff-pane {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  .diff-pane table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .diff-pane td { padding: 0 10px; vertical-align: top; }
+  td.lineno {
+    width: 1%;
+    min-width: 40px;
+    text-align: right;
+    color: var(--muted);
+    user-select: none;
+    border-right: 1px solid var(--border);
+    font-size: 11px;
+    padding-top: 2px;
+  }
+  td.code { white-space: pre-wrap; word-break: break-all; width: 100%; }
+  tr.add td.code { background: var(--add-bg); }
+  tr.del td.code { background: var(--del-bg); }
+  tr.empty td.code { background: rgba(110, 118, 129, 0.08); }
+  mark.add { background: var(--add-strong); color: inherit; border-radius: 2px; }
+  mark.del { background: var(--del-strong); color: inherit; border-radius: 2px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: center; }
+  @media (max-width: 800px) {
+    .inputs, .diff-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ Diff<span>Tool</span></h1>
+  <div class="controls">
+    <select id="mode">
+      <option value="auto">Auto-detect</option>
+      <option value="text">Plain text</option>
+      <option value="json">JSON (formatted)</option>
+    </select>
+    <label class="checkbox"><input type="checkbox" id="sortKeys"> Sort JSON keys</label>
+    <select id="view">
+      <option value="split">Split view</option>
+      <option value="unified">Unified view</option>
+    </select>
+    <button id="swap" title="Swap left and right">⇄ Swap</button>
+    <button id="sample">Sample</button>
+    <button id="clear">Clear</button>
+    <button id="compare" class="primary">Compare</button>
+  </div>
+</header>
+
+<div class="inputs">
+  <div class="pane">
+    <div class="pane-header"><span>Original (left)</span><span class="status" id="statusA"></span></div>
+    <textarea id="inputA" placeholder="Paste original text or JSON here…" spellcheck="false"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-header"><span>Changed (right)</span><span class="status" id="statusB"></span></div>
+    <textarea id="inputB" placeholder="Paste changed text or JSON here…" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<div id="result">
+  <div class="diff-grid" id="diffGrid">
+    <div class="diff-pane"><table id="tableLeft"></table></div>
+    <div class="diff-pane"><table id="tableRight"></table></div>
+  </div>
+</div>
+
+<p class="hint">Ctrl/Cmd + Enter to compare · JSON mode sorts object keys so key order doesn't create false diffs</p>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+// ---------- JSON helpers ----------
+
+function sortKeysDeep(value) {
+  if (Array.isArray(value)) return value.map(sortKeysDeep);
+  if (value !== null && typeof value === "object") {
+    const out = {};
+    for (const key of Object.keys(value).sort()) out[key] = sortKeysDeep(value[key]);
+    return out;
+  }
+  return value;
+}
+
+function tryParseJson(text) {
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// Returns { lines, label } after applying the selected mode.
+function preprocess(text, mode, statusEl) {
+  statusEl.textContent = "";
+  statusEl.className = "status";
+  const trimmed = text.trim();
+
+  if (mode === "text" || trimmed === "") return text.split("\n");
+
+  const parsed = tryParseJson(trimmed);
+  if (parsed.ok && typeof parsed.value === "object" && parsed.value !== null) {
+    statusEl.textContent = "valid JSON";
+    statusEl.className = "status ok";
+    const value = $("sortKeys").checked ? sortKeysDeep(parsed.value) : parsed.value;
+    return JSON.stringify(value, null, 2).split("\n");
+  }
+  if (mode === "json") {
+    statusEl.textContent = "invalid JSON: " + (parsed.error || "not an object/array");
+    statusEl.className = "status err";
+  }
+  return text.split("\n");
+}
+
+// ---------- Line diff (Myers-style via LCS) ----------
+
+// Returns ops: [{type: 'same'|'del'|'add', line, aIdx?, bIdx?}]
+function diffLines(a, b) {
+  // Trim common prefix/suffix first — keeps the DP table small for big inputs.
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let endA = a.length, endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+
+  const midA = a.slice(start, endA);
+  const midB = b.slice(start, endB);
+
+  const n = midA.length, m = midB.length;
+  // LCS lengths table (rolling rows would save memory, but we need the full
+  // table for backtracking; cap protects against pathological inputs).
+  if (n * m > 25_000_000) {
+    // Fallback: naive replace block, no alignment.
+    const ops = [];
+    for (let i = 0; i < start; i++) ops.push({ type: "same", line: a[i], aIdx: i, bIdx: i });
+    for (let i = 0; i < n; i++) ops.push({ type: "del", line: midA[i], aIdx: start + i });
+    for (let j = 0; j < m; j++) ops.push({ type: "add", line: midB[j], bIdx: start + j });
+    for (let k = 0; k < a.length - endA; k++) {
+      ops.push({ type: "same", line: a[endA + k], aIdx: endA + k, bIdx: endB + k });
+    }
+    return ops;
+  }
+
+  const width = m + 1;
+  const table = new Uint32Array((n + 1) * width);
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      table[i * width + j] = midA[i - 1] === midB[j - 1]
+        ? table[(i - 1) * width + (j - 1)] + 1
+        : Math.max(table[(i - 1) * width + j], table[i * width + (j - 1)]);
+    }
+  }
+
+  // Backtrack.
+  const mid = [];
+  let i = n, j = m;
+  while (i > 0 && j > 0) {
+    if (midA[i - 1] === midB[j - 1]) {
+      mid.push({ type: "same", line: midA[i - 1], aIdx: start + i - 1, bIdx: start + j - 1 });
+      i--; j--;
+    } else if (table[(i - 1) * width + j] >= table[i * width + (j - 1)]) {
+      mid.push({ type: "del", line: midA[i - 1], aIdx: start + i - 1 });
+      i--;
+    } else {
+      mid.push({ type: "add", line: midB[j - 1], bIdx: start + j - 1 });
+      j--;
+    }
+  }
+  while (i > 0) { mid.push({ type: "del", line: midA[i - 1], aIdx: start + --i }); }
+  while (j > 0) { mid.push({ type: "add", line: midB[j - 1], bIdx: start + --j }); }
+  mid.reverse();
+
+  const ops = [];
+  for (let k = 0; k < start; k++) ops.push({ type: "same", line: a[k], aIdx: k, bIdx: k });
+  ops.push(...mid);
+  for (let k = 0; k < a.length - endA; k++) {
+    ops.push({ type: "same", line: a[endA + k], aIdx: endA + k, bIdx: endB + k });
+  }
+  return ops;
+}
+
+// ---------- Char-level diff for paired changed lines ----------
+
+function diffChars(a, b) {
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let endA = a.length, endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+  return {
+    aParts: [a.slice(0, start), a.slice(start, endA), a.slice(endA)],
+    bParts: [b.slice(0, start), b.slice(start, endB), b.slice(endB)],
+  };
+}
+
+// ---------- Rendering ----------
+
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function row(cls, no1, no2, html, unified) {
+  const nums = unified
+    ? `<td class="lineno">${no1 ?? ""}</td><td class="lineno">${no2 ?? ""}</td>`
+    : `<td class="lineno">${no1 ?? ""}</td>`;
+  return `<tr class="${cls}">${nums}<td class="code">${html || "&nbsp;"}</td></tr>`;
+}
+
+function markedHtml(parts, cls) {
+  const [pre, mid, post] = parts;
+  return esc(pre) + (mid ? `<mark class="${cls}">${esc(mid)}</mark>` : "") + esc(post);
+}
+
+// Pair up del/add runs so changed lines sit side by side with char highlights.
+function buildRows(ops) {
+  const rows = []; // {type, left:{no,html}|null, right:{no,html}|null}
+  let k = 0;
+  while (k < ops.length) {
+    const op = ops[k];
+    if (op.type === "same") {
+      const html = esc(op.line);
+      rows.push({ type: "same", left: { no: op.aIdx + 1, html }, right: { no: op.bIdx + 1, html } });
+      k++;
+      continue;
+    }
+    // Collect a contiguous run of del then add.
+    const dels = [], adds = [];
+    while (k < ops.length && ops[k].type === "del") dels.push(ops[k++]);
+    while (k < ops.length && ops[k].type === "add") adds.push(ops[k++]);
+    const pairs = Math.max(dels.length, adds.length);
+    for (let p = 0; p < pairs; p++) {
+      const d = dels[p], a = adds[p];
+      let leftHtml = d ? esc(d.line) : null;
+      let rightHtml = a ? esc(a.line) : null;
+      if (d && a) {
+        const { aParts, bParts } = diffChars(d.line, a.line);
+        leftHtml = markedHtml(aParts, "del");
+        rightHtml = markedHtml(bParts, "add");
+      }
+      rows.push({
+        type: "change",
+        left: d ? { no: d.aIdx + 1, html: leftHtml } : null,
+        right: a ? { no: a.bIdx + 1, html: rightHtml } : null,
+      });
+    }
+  }
+  return rows;
+}
+
+function render(ops, view) {
+  const rows = buildRows(ops);
+  const left = [], right = [], uni = [];
+
+  for (const r of rows) {
+    if (r.type === "same") {
+      left.push(row("", r.left.no, null, r.left.html));
+      right.push(row("", r.right.no, null, r.right.html));
+      uni.push(row("", r.left.no, r.right.no, r.left.html, true));
+    } else {
+      left.push(r.left ? row("del", r.left.no, null, r.left.html) : row("empty", null, null, ""));
+      right.push(r.right ? row("add", r.right.no, null, r.right.html) : row("empty", null, null, ""));
+      if (r.left) uni.push(row("del", r.left.no, null, "- " + r.left.html, true));
+      if (r.right) uni.push(row("add", null, r.right.no, "+ " + r.right.html, true));
+    }
+  }
+
+  const grid = $("diffGrid");
+  const rightPane = $("tableRight").parentElement;
+  if (view === "unified") {
+    grid.classList.add("unified");
+    rightPane.style.display = "none";
+    $("tableLeft").innerHTML = uni.join("");
+  } else {
+    grid.classList.remove("unified");
+    rightPane.style.display = "";
+    $("tableLeft").innerHTML = left.join("");
+    $("tableRight").innerHTML = right.join("");
+  }
+}
+
+// ---------- Main ----------
+
+function compare() {
+  const mode = $("mode").value;
+  const a = preprocess($("inputA").value, mode, $("statusA"));
+  const b = preprocess($("inputB").value, mode, $("statusB"));
+
+  const ops = diffLines(a, b);
+  const added = ops.filter(o => o.type === "add").length;
+  const removed = ops.filter(o => o.type === "del").length;
+
+  const stats = $("stats");
+  if (added === 0 && removed === 0) {
+    stats.innerHTML = `<span class="same-msg">✓ Identical (${ops.length} lines)</span>`;
+  } else {
+    stats.innerHTML =
+      `<span class="added">+${added} added</span>` +
+      `<span class="removed">−${removed} removed</span>` +
+      `<span class="same-msg">${ops.length - added - removed} unchanged</span>`;
+  }
+
+  render(ops, $("view").value);
+  $("result").style.display = "block";
+}
+
+$("compare").addEventListener("click", compare);
+$("view").addEventListener("change", () => {
+  if ($("result").style.display === "block") compare();
+});
+$("sortKeys").addEventListener("change", () => {
+  if ($("result").style.display === "block") compare();
+});
+$("swap").addEventListener("click", () => {
+  const a = $("inputA").value;
+  $("inputA").value = $("inputB").value;
+  $("inputB").value = a;
+  if ($("result").style.display === "block") compare();
+});
+$("clear").addEventListener("click", () => {
+  $("inputA").value = "";
+  $("inputB").value = "";
+  $("stats").innerHTML = "";
+  $("statusA").textContent = "";
+  $("statusB").textContent = "";
+  $("result").style.display = "none";
+});
+$("sample").addEventListener("click", () => {
+  $("inputA").value = JSON.stringify({
+    name: "diff-tool", version: "1.0.0",
+    dependencies: { react: "^18.2.0", lodash: "^4.17.21" },
+    scripts: { build: "vite build", dev: "vite" },
+  }, null, 2);
+  $("inputB").value = JSON.stringify({
+    version: "1.1.0", name: "diff-tool",
+    dependencies: { react: "^18.3.1", axios: "^1.7.0" },
+    scripts: { dev: "vite", build: "vite build", test: "vitest" },
+  }, null, 2);
+  compare();
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") compare();
+});
+</script>
+</body>
+</html>
