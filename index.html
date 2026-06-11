@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diff Tool — Compare Text / JSON</title>
+<title>Diff Tool — Compare Text / JSON / YAML / XML / CSV</title>
 <style>
   :root {
     --bg: #0d1117;
@@ -12,11 +12,31 @@
     --text: #e6edf3;
     --muted: #8b949e;
     --accent: #58a6ff;
+    --ok: #3fb950;
+    --bad: #f85149;
+    --btn-primary: #238636;
+    --btn-primary-border: #2ea043;
     --add-bg: rgba(46, 160, 67, 0.18);
     --add-strong: rgba(46, 160, 67, 0.45);
     --del-bg: rgba(248, 81, 73, 0.18);
     --del-strong: rgba(248, 81, 73, 0.45);
+    --empty-bg: rgba(110, 118, 129, 0.08);
     --mono: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f8fa;
+    --panel: #ffffff;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #656d76;
+    --accent: #0969da;
+    --ok: #1a7f37;
+    --bad: #cf222e;
+    --add-bg: rgba(46, 160, 67, 0.15);
+    --add-strong: rgba(46, 160, 67, 0.35);
+    --del-bg: rgba(248, 81, 73, 0.12);
+    --del-strong: rgba(248, 81, 73, 0.3);
+    --empty-bg: rgba(110, 118, 129, 0.08);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -32,11 +52,17 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
   }
   h1 { font-size: 20px; font-weight: 600; }
   h1 span { color: var(--accent); }
-  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .controls, .options {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .options { margin-bottom: 16px; }
   select, button {
     background: var(--panel);
     color: var(--text);
@@ -48,6 +74,18 @@
     transition: border-color .15s, background .15s;
   }
   select:hover, button:hover { border-color: var(--accent); }
+  button.primary {
+    background: var(--btn-primary);
+    border-color: var(--btn-primary-border);
+    color: #fff;
+    font-weight: 600;
+  }
+  button.mini {
+    padding: 2px 8px;
+    font-size: 12px;
+    border: none;
+    background: transparent;
+  }
   label.checkbox {
     display: flex;
     align-items: center;
@@ -58,12 +96,6 @@
     user-select: none;
   }
   label.checkbox input { accent-color: var(--accent); cursor: pointer; }
-  button.primary {
-    background: #238636;
-    border-color: #2ea043;
-    font-weight: 600;
-  }
-  button.primary:hover { background: #2ea043; }
   .inputs {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -76,18 +108,20 @@
     border-radius: 8px;
     overflow: hidden;
   }
+  .pane.dragover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
   .pane-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--border);
     font-size: 13px;
     color: var(--muted);
   }
-  .pane-header .status { font-size: 12px; }
-  .status.ok { color: #3fb950; }
-  .status.err { color: #f85149; }
+  .pane-header .right { display: flex; align-items: center; gap: 8px; }
+  .status { font-size: 12px; }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--bad); }
   textarea {
     width: 100%;
     height: 220px;
@@ -110,8 +144,8 @@
     font-size: 13px;
     min-height: 20px;
   }
-  .stats .added { color: #3fb950; }
-  .stats .removed { color: #f85149; }
+  .stats .added { color: var(--ok); }
+  .stats .removed { color: var(--bad); }
   .stats .same-msg { color: var(--muted); }
   #result { display: none; }
   .diff-grid {
@@ -147,10 +181,51 @@
   td.code { white-space: pre-wrap; word-break: break-all; width: 100%; }
   tr.add td.code { background: var(--add-bg); }
   tr.del td.code { background: var(--del-bg); }
-  tr.empty td.code { background: rgba(110, 118, 129, 0.08); }
+  tr.empty td.code { background: var(--empty-bg); }
+  tr.collapse td.code {
+    background: var(--empty-bg);
+    color: var(--muted);
+    text-align: center;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 3px 10px;
+  }
+  tr.collapse:hover td.code { color: var(--accent); }
   mark.add { background: var(--add-strong); color: inherit; border-radius: 2px; }
   mark.del { background: var(--del-strong); color: inherit; border-radius: 2px; }
+  table.structural { font-family: var(--mono); font-size: 13px; }
+  table.structural td { padding: 4px 10px; border-bottom: 1px solid var(--border); }
+  table.structural tr:last-child td { border-bottom: none; }
+  td.spath { color: var(--accent); white-space: nowrap; }
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-family: -apple-system, sans-serif;
+  }
+  .badge.added { background: var(--add-strong); }
+  .badge.removed { background: var(--del-strong); }
+  .badge.changed { background: rgba(210, 153, 34, 0.4); }
+  td.sval { word-break: break-all; }
+  td.sval .old { color: var(--bad); text-decoration: line-through; }
+  td.sval .new { color: var(--ok); }
+  td.sval .arrow { color: var(--muted); padding: 0 6px; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: center; }
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 13px;
+    transition: transform .25s;
+    z-index: 10;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
   @media (max-width: 800px) {
     .inputs, .diff-grid { grid-template-columns: 1fr; }
   }
@@ -161,51 +236,73 @@
 <header>
   <h1>⚡ Diff<span>Tool</span></h1>
   <div class="controls">
-    <select id="mode">
+    <select id="mode" title="Input format">
       <option value="auto">Auto-detect</option>
       <option value="text">Plain text</option>
-      <option value="json">JSON (formatted)</option>
+      <option value="json">JSON</option>
+      <option value="yaml">YAML</option>
+      <option value="xml">XML</option>
+      <option value="csv">CSV</option>
     </select>
-    <label class="checkbox"><input type="checkbox" id="sortKeys"> Sort JSON keys</label>
-    <select id="view">
+    <select id="view" title="Result view">
       <option value="split">Split view</option>
       <option value="unified">Unified view</option>
+      <option value="structural">Structural (JSON/YAML)</option>
     </select>
-    <button id="swap" title="Swap left and right">⇄ Swap</button>
-    <button id="sample">Sample</button>
-    <button id="clear">Clear</button>
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
     <button id="compare" class="primary">Compare</button>
   </div>
 </header>
 
+<div class="options">
+  <label class="checkbox"><input type="checkbox" id="sortKeys"> Sort keys</label>
+  <label class="checkbox"><input type="checkbox" id="ignoreWs"> Ignore whitespace</label>
+  <label class="checkbox"><input type="checkbox" id="ignoreCase"> Ignore case</label>
+  <button id="swap" title="Swap left and right">⇄ Swap</button>
+  <button id="sample">Sample</button>
+  <button id="clear">Clear</button>
+  <button id="share" title="Copy a shareable link containing both inputs">🔗 Share</button>
+  <button id="patch" title="Copy unified diff as patch text">📋 Copy patch</button>
+  <button id="export" title="Download the rendered diff as standalone HTML">💾 Export HTML</button>
+</div>
+
 <div class="inputs">
-  <div class="pane">
-    <div class="pane-header"><span>Original (left)</span><span class="status" id="statusA"></span></div>
-    <textarea id="inputA" placeholder="Paste original text or JSON here…" spellcheck="false"></textarea>
+  <div class="pane" id="paneA">
+    <div class="pane-header">
+      <span>Original (left)</span>
+      <span class="right"><span class="status" id="statusA"></span><button class="mini" data-side="A" title="Open file">📂</button></span>
+    </div>
+    <textarea id="inputA" placeholder="Paste original here, or drag &amp; drop a file…" spellcheck="false"></textarea>
   </div>
-  <div class="pane">
-    <div class="pane-header"><span>Changed (right)</span><span class="status" id="statusB"></span></div>
-    <textarea id="inputB" placeholder="Paste changed text or JSON here…" spellcheck="false"></textarea>
+  <div class="pane" id="paneB">
+    <div class="pane-header">
+      <span>Changed (right)</span>
+      <span class="right"><span class="status" id="statusB"></span><button class="mini" data-side="B" title="Open file">📂</button></span>
+    </div>
+    <textarea id="inputB" placeholder="Paste changed here, or drag &amp; drop a file…" spellcheck="false"></textarea>
   </div>
 </div>
+<input type="file" id="fileA" hidden>
+<input type="file" id="fileB" hidden>
 
 <div class="stats" id="stats"></div>
 
 <div id="result">
   <div class="diff-grid" id="diffGrid">
     <div class="diff-pane"><table id="tableLeft"></table></div>
-    <div class="diff-pane"><table id="tableRight"></table></div>
+    <div class="diff-pane" id="rightPane"><table id="tableRight"></table></div>
   </div>
 </div>
 
-<p class="hint">Ctrl/Cmd + Enter to compare · JSON mode sorts object keys so key order doesn't create false diffs</p>
+<p class="hint">Ctrl/Cmd + Enter to compare · drag &amp; drop files onto the panes · JSON/YAML can be diffed structurally · long unchanged regions collapse (click to expand)</p>
+<div id="toast"></div>
 
 <script>
 "use strict";
 
 const $ = (id) => document.getElementById(id);
 
-// ---------- JSON helpers ----------
+// ---------- Format helpers ----------
 
 function sortKeysDeep(value) {
   if (Array.isArray(value)) return value.map(sortKeysDeep);
@@ -217,158 +314,357 @@ function sortKeysDeep(value) {
   return value;
 }
 
-function tryParseJson(text) {
+// JSON.parse with a retry that strips trailing commas (common paste artifact).
+function parseJsonLoose(text) {
   try {
-    return { ok: true, value: JSON.parse(text) };
-  } catch (e) {
-    return { ok: false, error: e.message };
+    return { value: JSON.parse(text), note: "" };
+  } catch (firstErr) {
+    try {
+      const stripped = text.replace(/,\s*([}\]])/g, "$1");
+      return { value: JSON.parse(stripped), note: " (trailing commas fixed)" };
+    } catch (e) {
+      throw firstErr;
+    }
   }
 }
 
-// Returns { lines, label } after applying the selected mode.
+// --- Minimal YAML subset: nested maps, lists, scalars, comments.
+// No anchors, multi-line strings, or multi-doc support.
+
+function yamlStripComment(line) {
+  let inS = false, inD = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === "'" && !inD) inS = !inS;
+    else if (c === '"' && !inS) inD = !inD;
+    else if (c === "#" && !inS && !inD && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i);
+  }
+  return line;
+}
+
+function yamlScalar(s) {
+  s = s.trim();
+  if (s === "" || s === "null" || s === "~") return null;
+  if (s === "true") return true;
+  if (s === "false") return false;
+  if (/^-?\d+$/.test(s)) return parseInt(s, 10);
+  if (/^-?\d*\.\d+(e-?\d+)?$/i.test(s)) return parseFloat(s);
+  if ((s[0] === '"' && s.endsWith('"')) || (s[0] === "'" && s.endsWith("'"))) return s.slice(1, -1);
+  if (s === "[]") return [];
+  if (s === "{}") return {};
+  if (s[0] === "[" || s[0] === "{") {
+    try { return JSON.parse(s.replace(/'/g, '"')); } catch (e) { /* keep as string */ }
+  }
+  return s;
+}
+
+function parseYaml(text) {
+  const items = [];
+  for (let line of text.split("\n")) {
+    line = yamlStripComment(line.replace(/\t/g, "  ")).trimEnd();
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed === "---") continue;
+    items.push({ indent: line.length - line.trimStart().length, text: trimmed });
+  }
+  if (!items.length) return null;
+
+  function parseItems(list, i, indent) {
+    if (list[i].text === "-" || list[i].text.startsWith("- ")) {
+      const arr = [];
+      while (i < list.length && list[i].indent === indent && (list[i].text === "-" || list[i].text.startsWith("- "))) {
+        const rest = list[i].text.slice(1).trim();
+        if (rest === "") {
+          if (i + 1 < list.length && list[i + 1].indent > indent) {
+            const r = parseItems(list, i + 1, list[i + 1].indent);
+            arr.push(r.value);
+            i = r.next;
+          } else { arr.push(null); i++; }
+        } else if (/^[^:\s][^:]*:(\s|$)/.test(rest)) {
+          // Inline "key: value" inside a list item joins the indented block below it.
+          const sub = [{ indent: indent + 2, text: rest }];
+          let j = i + 1;
+          while (j < list.length && list[j].indent > indent) sub.push(list[j++]);
+          const r = parseItems(sub, 0, indent + 2);
+          arr.push(r.value);
+          i = j;
+        } else { arr.push(yamlScalar(rest)); i++; }
+      }
+      return { value: arr, next: i };
+    }
+    const obj = {};
+    while (i < list.length && list[i].indent === indent && !list[i].text.startsWith("- ") && list[i].text !== "-") {
+      const m = list[i].text.match(/^("[^"]*"|'[^']*'|[^:]+):\s*(.*)$/);
+      if (!m) throw new Error("cannot parse line: " + list[i].text);
+      const key = m[1].replace(/^["']|["']$/g, "");
+      const rest = m[2];
+      if (rest === "") {
+        if (i + 1 < list.length && list[i + 1].indent > indent) {
+          const r = parseItems(list, i + 1, list[i + 1].indent);
+          obj[key] = r.value;
+          i = r.next;
+        } else { obj[key] = null; i++; }
+      } else { obj[key] = yamlScalar(rest); i++; }
+    }
+    return { value: obj, next: i };
+  }
+
+  const result = parseItems(items, 0, items[0].indent);
+  if (result.next < items.length) throw new Error("inconsistent indentation near: " + items[result.next].text);
+  return result.value;
+}
+
+// --- XML pretty-printer via DOMParser.
+
+function formatXml(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  const err = doc.querySelector("parsererror");
+  if (err) throw new Error(err.textContent.split("\n")[0]);
+  const out = [];
+  (function walk(node, depth) {
+    const pad = "  ".repeat(depth);
+    for (const child of node.childNodes) {
+      if (child.nodeType === 1) {
+        const attrs = [...child.attributes].map(a => ` ${a.name}="${a.value}"`).join("");
+        const kids = [...child.childNodes];
+        const text = kids.length === 1 && kids[0].nodeType === 3 ? kids[0].textContent.trim() : null;
+        if (!kids.length) out.push(`${pad}<${child.nodeName}${attrs}/>`);
+        else if (text !== null) out.push(`${pad}<${child.nodeName}${attrs}>${text}</${child.nodeName}>`);
+        else {
+          out.push(`${pad}<${child.nodeName}${attrs}>`);
+          walk(child, depth + 1);
+          out.push(`${pad}</${child.nodeName}>`);
+        }
+      } else if (child.nodeType === 3) {
+        const t = child.textContent.trim();
+        if (t) out.push(pad + t);
+      } else if (child.nodeType === 8) {
+        out.push(`${pad}<!--${child.textContent}-->`);
+      }
+    }
+  })(doc, 0);
+  return out.join("\n");
+}
+
+// --- CSV: parse with quote handling, re-serialize with normalized quoting.
+
+function parseCsv(text) {
+  const rows = [[]];
+  let cur = "", inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = false;
+      } else cur += c;
+    }
+    else if (c === '"') inQ = true;
+    else if (c === ",") { rows[rows.length - 1].push(cur); cur = ""; }
+    else if (c === "\n") { rows[rows.length - 1].push(cur); cur = ""; rows.push([]); }
+    else if (c !== "\r") cur += c;
+  }
+  rows[rows.length - 1].push(cur);
+  const last = rows[rows.length - 1];
+  if (rows.length > 1 && last.length === 1 && last[0] === "") rows.pop();
+  return rows;
+}
+
+function formatCsv(rows) {
+  return rows.map(r => r.map(c => {
+    c = String(c).trim();
+    return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c;
+  }).join(",")).join("\n");
+}
+
+// ---------- Preprocess: normalize input per mode ----------
+
+function detectFormat(trimmed) {
+  if (trimmed[0] === "{" || trimmed[0] === "[") return "json";
+  if (trimmed[0] === "<") return "xml";
+  return "text";
+}
+
+function setStatus(el, msg, cls) {
+  el.textContent = msg;
+  el.className = "status" + (cls ? " " + cls : "");
+}
+
+// Returns { lines, value } — value is the parsed object for JSON/YAML (used by structural view).
 function preprocess(text, mode, statusEl) {
-  statusEl.textContent = "";
-  statusEl.className = "status";
+  setStatus(statusEl, "");
+  const result = { lines: text.split("\n"), value: null };
   const trimmed = text.trim();
+  if (trimmed === "") return result;
 
-  if (mode === "text" || trimmed === "") return text.split("\n");
-
-  const parsed = tryParseJson(trimmed);
-  if (parsed.ok && typeof parsed.value === "object" && parsed.value !== null) {
-    statusEl.textContent = "valid JSON";
-    statusEl.className = "status ok";
-    const value = $("sortKeys").checked ? sortKeysDeep(parsed.value) : parsed.value;
-    return JSON.stringify(value, null, 2).split("\n");
+  const fmt = mode === "auto" ? detectFormat(trimmed) : mode;
+  try {
+    if (fmt === "json") {
+      const { value, note } = parseJsonLoose(trimmed);
+      result.value = $("sortKeys").checked ? sortKeysDeep(value) : value;
+      result.lines = JSON.stringify(result.value, null, 2).split("\n");
+      setStatus(statusEl, "valid JSON" + note, "ok");
+    } else if (fmt === "yaml") {
+      const value = parseYaml(text);
+      result.value = $("sortKeys").checked ? sortKeysDeep(value) : value;
+      result.lines = JSON.stringify(result.value, null, 2).split("\n");
+      setStatus(statusEl, "YAML parsed (shown as JSON)", "ok");
+    } else if (fmt === "xml") {
+      result.lines = formatXml(trimmed).split("\n");
+      setStatus(statusEl, "XML formatted", "ok");
+    } else if (fmt === "csv") {
+      result.lines = formatCsv(parseCsv(text)).split("\n");
+      setStatus(statusEl, "CSV normalized", "ok");
+    }
+  } catch (e) {
+    if (mode !== "auto") setStatus(statusEl, `invalid ${fmt.toUpperCase()}: ${e.message}`, "err");
+    return { lines: text.split("\n"), value: null };
   }
-  if (mode === "json") {
-    statusEl.textContent = "invalid JSON: " + (parsed.error || "not an object/array");
-    statusEl.className = "status err";
-  }
-  return text.split("\n");
+  return result;
 }
 
-// ---------- Line diff (Myers-style via LCS) ----------
+function compareKey(line) {
+  let k = line;
+  if ($("ignoreWs").checked) k = k.trim().replace(/\s+/g, " ");
+  if ($("ignoreCase").checked) k = k.toLowerCase();
+  return k;
+}
 
-// Returns ops: [{type: 'same'|'del'|'add', line, aIdx?, bIdx?}]
-function diffLines(a, b) {
-  // Trim common prefix/suffix first — keeps the DP table small for big inputs.
+// ---------- Core LCS diff over arbitrary key arrays ----------
+
+// Returns ops: [{type: 'same'|'del'|'add', aIdx?, bIdx?}]
+function diffCore(aKeys, bKeys) {
   let start = 0;
-  while (start < a.length && start < b.length && a[start] === b[start]) start++;
-  let endA = a.length, endB = b.length;
-  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+  while (start < aKeys.length && start < bKeys.length && aKeys[start] === bKeys[start]) start++;
+  let endA = aKeys.length, endB = bKeys.length;
+  while (endA > start && endB > start && aKeys[endA - 1] === bKeys[endB - 1]) { endA--; endB--; }
 
-  const midA = a.slice(start, endA);
-  const midB = b.slice(start, endB);
-
-  const n = midA.length, m = midB.length;
-  // LCS lengths table (rolling rows would save memory, but we need the full
-  // table for backtracking; cap protects against pathological inputs).
-  if (n * m > 25_000_000) {
-    // Fallback: naive replace block, no alignment.
-    const ops = [];
-    for (let i = 0; i < start; i++) ops.push({ type: "same", line: a[i], aIdx: i, bIdx: i });
-    for (let i = 0; i < n; i++) ops.push({ type: "del", line: midA[i], aIdx: start + i });
-    for (let j = 0; j < m; j++) ops.push({ type: "add", line: midB[j], bIdx: start + j });
-    for (let k = 0; k < a.length - endA; k++) {
-      ops.push({ type: "same", line: a[endA + k], aIdx: endA + k, bIdx: endB + k });
-    }
-    return ops;
-  }
-
-  const width = m + 1;
-  const table = new Uint32Array((n + 1) * width);
-  for (let i = 1; i <= n; i++) {
-    for (let j = 1; j <= m; j++) {
-      table[i * width + j] = midA[i - 1] === midB[j - 1]
-        ? table[(i - 1) * width + (j - 1)] + 1
-        : Math.max(table[(i - 1) * width + j], table[i * width + (j - 1)]);
-    }
-  }
-
-  // Backtrack.
-  const mid = [];
-  let i = n, j = m;
-  while (i > 0 && j > 0) {
-    if (midA[i - 1] === midB[j - 1]) {
-      mid.push({ type: "same", line: midA[i - 1], aIdx: start + i - 1, bIdx: start + j - 1 });
-      i--; j--;
-    } else if (table[(i - 1) * width + j] >= table[i * width + (j - 1)]) {
-      mid.push({ type: "del", line: midA[i - 1], aIdx: start + i - 1 });
-      i--;
-    } else {
-      mid.push({ type: "add", line: midB[j - 1], bIdx: start + j - 1 });
-      j--;
-    }
-  }
-  while (i > 0) { mid.push({ type: "del", line: midA[i - 1], aIdx: start + --i }); }
-  while (j > 0) { mid.push({ type: "add", line: midB[j - 1], bIdx: start + --j }); }
-  mid.reverse();
-
+  const n = endA - start, m = endB - start;
   const ops = [];
-  for (let k = 0; k < start; k++) ops.push({ type: "same", line: a[k], aIdx: k, bIdx: k });
-  ops.push(...mid);
-  for (let k = 0; k < a.length - endA; k++) {
-    ops.push({ type: "same", line: a[endA + k], aIdx: endA + k, bIdx: endB + k });
+  for (let k = 0; k < start; k++) ops.push({ type: "same", aIdx: k, bIdx: k });
+
+  if (n * m > 25_000_000) {
+    // Pathologically large: naive replace block, no alignment.
+    for (let i = 0; i < n; i++) ops.push({ type: "del", aIdx: start + i });
+    for (let j = 0; j < m; j++) ops.push({ type: "add", bIdx: start + j });
+  } else {
+    const width = m + 1;
+    const table = new Uint32Array((n + 1) * width);
+    for (let i = 1; i <= n; i++) {
+      for (let j = 1; j <= m; j++) {
+        table[i * width + j] = aKeys[start + i - 1] === bKeys[start + j - 1]
+          ? table[(i - 1) * width + (j - 1)] + 1
+          : Math.max(table[(i - 1) * width + j], table[i * width + (j - 1)]);
+      }
+    }
+    const mid = [];
+    let i = n, j = m;
+    while (i > 0 && j > 0) {
+      if (aKeys[start + i - 1] === bKeys[start + j - 1]) {
+        mid.push({ type: "same", aIdx: start + i - 1, bIdx: start + j - 1 });
+        i--; j--;
+      } else if (table[(i - 1) * width + j] >= table[i * width + (j - 1)]) {
+        mid.push({ type: "del", aIdx: start + --i });
+      } else {
+        mid.push({ type: "add", bIdx: start + --j });
+      }
+    }
+    while (i > 0) mid.push({ type: "del", aIdx: start + --i });
+    while (j > 0) mid.push({ type: "add", bIdx: start + --j });
+    mid.reverse();
+    ops.push(...mid);
   }
-  return ops;
+
+  for (let k = 0; k < aKeys.length - endA; k++) {
+    ops.push({ type: "same", aIdx: endA + k, bIdx: endB + k });
+  }
+  return normalizeOps(ops);
 }
 
-// ---------- Char-level diff for paired changed lines ----------
-
-function diffChars(a, b) {
-  let start = 0;
-  while (start < a.length && start < b.length && a[start] === b[start]) start++;
-  let endA = a.length, endB = b.length;
-  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
-  return {
-    aParts: [a.slice(0, start), a.slice(start, endA), a.slice(endA)],
-    bParts: [b.slice(0, start), b.slice(start, endB), b.slice(endB)],
-  };
+// Within each contiguous changed run, emit dels before adds — diff convention,
+// and buildRows/makePatch rely on it to pair lines correctly.
+function normalizeOps(ops) {
+  const out = [];
+  let i = 0;
+  while (i < ops.length) {
+    if (ops[i].type === "same") { out.push(ops[i++]); continue; }
+    const dels = [], adds = [];
+    while (i < ops.length && ops[i].type !== "same") {
+      (ops[i].type === "del" ? dels : adds).push(ops[i]);
+      i++;
+    }
+    out.push(...dels, ...adds);
+  }
+  return out;
 }
 
-// ---------- Rendering ----------
+// ---------- Word-level inline diff for paired changed lines ----------
 
 function esc(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function row(cls, no1, no2, html, unified) {
-  const nums = unified
-    ? `<td class="lineno">${no1 ?? ""}</td><td class="lineno">${no2 ?? ""}</td>`
-    : `<td class="lineno">${no1 ?? ""}</td>`;
-  return `<tr class="${cls}">${nums}<td class="code">${html || "&nbsp;"}</td></tr>`;
+function tokenize(s) {
+  return s.match(/\w+|\s+|[^\w\s]/g) || [];
 }
 
-function markedHtml(parts, cls) {
-  const [pre, mid, post] = parts;
-  return esc(pre) + (mid ? `<mark class="${cls}">${esc(mid)}</mark>` : "") + esc(post);
+function inlineHtml(ops, tokens, keep) {
+  const skip = keep === "del" ? "add" : "del";
+  let out = "", inMark = false;
+  for (const o of ops) {
+    if (o.type === skip) continue;
+    const tok = keep === "del" ? tokens[o.aIdx] : tokens[o.bIdx];
+    const marked = o.type !== "same";
+    if (marked !== inMark) {
+      if (inMark) out += "</mark>";
+      if (marked) out += `<mark class="${keep}">`;
+      inMark = marked;
+    }
+    out += esc(tok);
+  }
+  if (inMark) out += "</mark>";
+  return out;
 }
 
-// Pair up del/add runs so changed lines sit side by side with char highlights.
-function buildRows(ops) {
-  const rows = []; // {type, left:{no,html}|null, right:{no,html}|null}
+function inlinePair(aLine, bLine) {
+  const aTok = tokenize(aLine), bTok = tokenize(bLine);
+  const ops = diffCore(aTok, bTok);
+  return {
+    leftHtml: inlineHtml(ops, aTok, "del"),
+    rightHtml: inlineHtml(ops, bTok, "add"),
+  };
+}
+
+// ---------- Row building & rendering ----------
+
+const COLLAPSE_CONTEXT = 3;
+const COLLAPSE_MIN = 10; // collapse same-runs longer than this
+
+let lastOps = [], lastRows = [], lastA = [], lastB = [];
+let expanded = new Set();
+
+function buildRows(ops, aLines, bLines) {
+  const rows = [];
   let k = 0;
   while (k < ops.length) {
     const op = ops[k];
     if (op.type === "same") {
-      const html = esc(op.line);
-      rows.push({ type: "same", left: { no: op.aIdx + 1, html }, right: { no: op.bIdx + 1, html } });
+      const html = esc(aLines[op.aIdx]);
+      rows.push({ type: "same", left: { no: op.aIdx + 1, html }, right: { no: op.bIdx + 1, html: esc(bLines[op.bIdx]) } });
       k++;
       continue;
     }
-    // Collect a contiguous run of del then add.
     const dels = [], adds = [];
     while (k < ops.length && ops[k].type === "del") dels.push(ops[k++]);
     while (k < ops.length && ops[k].type === "add") adds.push(ops[k++]);
     const pairs = Math.max(dels.length, adds.length);
     for (let p = 0; p < pairs; p++) {
       const d = dels[p], a = adds[p];
-      let leftHtml = d ? esc(d.line) : null;
-      let rightHtml = a ? esc(a.line) : null;
+      let leftHtml = d ? esc(aLines[d.aIdx]) : null;
+      let rightHtml = a ? esc(bLines[a.bIdx]) : null;
       if (d && a) {
-        const { aParts, bParts } = diffChars(d.line, a.line);
-        leftHtml = markedHtml(aParts, "del");
-        rightHtml = markedHtml(bParts, "add");
+        const pair = inlinePair(aLines[d.aIdx], bLines[a.bIdx]);
+        leftHtml = pair.leftHtml;
+        rightHtml = pair.rightHtml;
       }
       rows.push({
         type: "change",
@@ -380,25 +676,66 @@ function buildRows(ops) {
   return rows;
 }
 
-function render(ops, view) {
-  const rows = buildRows(ops);
-  const left = [], right = [], uni = [];
-
-  for (const r of rows) {
-    if (r.type === "same") {
-      left.push(row("", r.left.no, null, r.left.html));
-      right.push(row("", r.right.no, null, r.right.html));
-      uni.push(row("", r.left.no, r.right.no, r.left.html, true));
+// Collapse long unchanged runs into clickable markers.
+function visibleRows(rows) {
+  const out = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i].type !== "same") { out.push({ row: rows[i] }); i++; continue; }
+    let j = i;
+    while (j < rows.length && rows[j].type === "same") j++;
+    const run = j - i;
+    if (run > COLLAPSE_MIN + 2 * COLLAPSE_CONTEXT && !expanded.has(i)) {
+      for (let k = i; k < i + COLLAPSE_CONTEXT; k++) out.push({ row: rows[k] });
+      out.push({ collapse: true, start: i, count: run - 2 * COLLAPSE_CONTEXT });
+      for (let k = j - COLLAPSE_CONTEXT; k < j; k++) out.push({ row: rows[k] });
     } else {
-      left.push(r.left ? row("del", r.left.no, null, r.left.html) : row("empty", null, null, ""));
-      right.push(r.right ? row("add", r.right.no, null, r.right.html) : row("empty", null, null, ""));
-      if (r.left) uni.push(row("del", r.left.no, null, "- " + r.left.html, true));
-      if (r.right) uni.push(row("add", null, r.right.no, "+ " + r.right.html, true));
+      for (let k = i; k < j; k++) out.push({ row: rows[k] });
+    }
+    i = j;
+  }
+  return out;
+}
+
+function rowHtml(cls, nums, html) {
+  return `<tr class="${cls}">${nums}<td class="code">${html || "&nbsp;"}</td></tr>`;
+}
+
+function num(n) { return `<td class="lineno">${n ?? ""}</td>`; }
+
+function render() {
+  const view = $("view").value;
+  const grid = $("diffGrid");
+  const rightPane = $("rightPane");
+
+  if (view === "structural") {
+    renderStructural();
+    return;
+  }
+
+  const rows = visibleRows(lastRows);
+  const left = [], right = [], uni = [];
+  for (const r of rows) {
+    if (r.collapse) {
+      const cell = `<td class="code">⋯ ${r.count} unchanged lines — click to expand ⋯</td>`;
+      left.push(`<tr class="collapse" data-start="${r.start}">${num()}${cell}</tr>`);
+      right.push(`<tr class="collapse" data-start="${r.start}">${num()}${cell}</tr>`);
+      uni.push(`<tr class="collapse" data-start="${r.start}">${num()}${num()}${cell}</tr>`);
+      continue;
+    }
+    const w = r.row;
+    if (w.type === "same") {
+      left.push(rowHtml("", num(w.left.no), w.left.html));
+      right.push(rowHtml("", num(w.right.no), w.right.html));
+      uni.push(rowHtml("", num(w.left.no) + num(w.right.no), w.left.html));
+    } else {
+      left.push(w.left ? rowHtml("del", num(w.left.no), w.left.html) : rowHtml("empty", num(), ""));
+      right.push(w.right ? rowHtml("add", num(w.right.no), w.right.html) : rowHtml("empty", num(), ""));
+      if (w.left) uni.push(rowHtml("del", num(w.left.no) + num(), "- " + w.left.html));
+      if (w.right) uni.push(rowHtml("add", num() + num(w.right.no), "+ " + w.right.html));
     }
   }
 
-  const grid = $("diffGrid");
-  const rightPane = $("tableRight").parentElement;
   if (view === "unified") {
     grid.classList.add("unified");
     rightPane.style.display = "none";
@@ -411,52 +748,244 @@ function render(ops, view) {
   }
 }
 
+// ---------- Structural diff (parsed JSON/YAML) ----------
+
+function structKind(v) {
+  if (Array.isArray(v)) return "array";
+  if (v !== null && typeof v === "object") return "object";
+  return "primitive";
+}
+
+function structDiff(a, b, path, out) {
+  const ka = structKind(a), kb = structKind(b);
+  if (ka !== kb) { out.push({ path, type: "changed", a, b }); return; }
+  if (ka === "object") {
+    for (const key of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
+      const p = `${path}.${key}`;
+      if (!(key in a)) out.push({ path: p, type: "added", b: b[key] });
+      else if (!(key in b)) out.push({ path: p, type: "removed", a: a[key] });
+      else structDiff(a[key], b[key], p, out);
+    }
+  } else if (ka === "array") {
+    const n = Math.max(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      const p = `${path}[${i}]`;
+      if (i >= a.length) out.push({ path: p, type: "added", b: b[i] });
+      else if (i >= b.length) out.push({ path: p, type: "removed", a: a[i] });
+      else structDiff(a[i], b[i], p, out);
+    }
+  } else if (a !== b) {
+    out.push({ path, type: "changed", a, b });
+  }
+}
+
+function shortVal(v) {
+  const s = JSON.stringify(v);
+  return s === undefined ? "undefined" : s.length > 100 ? s.slice(0, 97) + "…" : s;
+}
+
+let lastValues = { a: null, b: null };
+
+function renderStructural() {
+  const grid = $("diffGrid");
+  grid.classList.add("unified");
+  $("rightPane").style.display = "none";
+  const table = $("tableLeft");
+  table.className = "structural";
+
+  if (lastValues.a === null || lastValues.b === null) {
+    table.innerHTML = `<tr><td class="sval">Structural view needs valid JSON or YAML on both sides. Switch mode to JSON/YAML or fix parse errors.</td></tr>`;
+    return;
+  }
+  const entries = [];
+  structDiff(lastValues.a, lastValues.b, "$", entries);
+  if (!entries.length) {
+    table.innerHTML = `<tr><td class="sval">✓ No structural differences.</td></tr>`;
+    return;
+  }
+  table.innerHTML = entries.map(e => {
+    let val;
+    if (e.type === "added") val = `<span class="new">${esc(shortVal(e.b))}</span>`;
+    else if (e.type === "removed") val = `<span class="old">${esc(shortVal(e.a))}</span>`;
+    else val = `<span class="old">${esc(shortVal(e.a))}</span><span class="arrow">→</span><span class="new">${esc(shortVal(e.b))}</span>`;
+    return `<tr><td class="spath">${esc(e.path)}</td><td><span class="badge ${e.type}">${e.type}</span></td><td class="sval">${val}</td></tr>`;
+  }).join("");
+}
+
+// ---------- Unified patch text ----------
+
+function makePatch(ops, aLines, bLines) {
+  const changed = [];
+  ops.forEach((o, i) => { if (o.type !== "same") changed.push(i); });
+  if (!changed.length) return "";
+  const C = 3;
+  const hunks = [];
+  let s = Math.max(0, changed[0] - C);
+  let e = Math.min(ops.length, changed[0] + C + 1);
+  for (let k = 1; k < changed.length; k++) {
+    const i = changed[k];
+    if (i - C <= e) e = Math.min(ops.length, i + C + 1);
+    else { hunks.push([s, e]); s = Math.max(0, i - C); e = Math.min(ops.length, i + C + 1); }
+  }
+  hunks.push([s, e]);
+
+  const out = ["--- left", "+++ right"];
+  for (const [hs, he] of hunks) {
+    let aStart = null, bStart = null, aCount = 0, bCount = 0;
+    const body = [];
+    for (let i = hs; i < he; i++) {
+      const o = ops[i];
+      if (o.type !== "add") { if (aStart === null) aStart = o.aIdx; aCount++; }
+      if (o.type !== "del") { if (bStart === null) bStart = o.bIdx; bCount++; }
+      const ch = o.type === "same" ? " " : o.type === "del" ? "-" : "+";
+      body.push(ch + (o.type === "add" ? bLines[o.bIdx] : aLines[o.aIdx]));
+    }
+    if (aStart === null) aStart = bStart ?? 0;
+    if (bStart === null) bStart = aStart;
+    out.push(`@@ -${aStart + 1},${aCount} +${bStart + 1},${bCount} @@`, ...body);
+  }
+  return out.join("\n") + "\n";
+}
+
+// ---------- Share links & persistence ----------
+
+function b64urlEncode(u8) {
+  let s = "";
+  for (const b of u8) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function b64urlDecode(str) {
+  const s = atob(str.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(s, c => c.charCodeAt(0));
+}
+
+async function encodeState(state) {
+  const bytes = new TextEncoder().encode(JSON.stringify(state));
+  if ("CompressionStream" in window) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+    const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+    return "c" + b64urlEncode(compressed);
+  }
+  return "p" + b64urlEncode(bytes);
+}
+
+async function decodeState(encoded) {
+  const kind = encoded[0];
+  const bytes = b64urlDecode(encoded.slice(1));
+  let jsonBytes = bytes;
+  if (kind === "c") {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    jsonBytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  return JSON.parse(new TextDecoder().decode(jsonBytes));
+}
+
+function collectState() {
+  return {
+    a: $("inputA").value,
+    b: $("inputB").value,
+    mode: $("mode").value,
+    view: $("view").value,
+    sortKeys: $("sortKeys").checked,
+    ignoreWs: $("ignoreWs").checked,
+    ignoreCase: $("ignoreCase").checked,
+  };
+}
+
+function applyState(st) {
+  $("inputA").value = st.a ?? "";
+  $("inputB").value = st.b ?? "";
+  if (st.mode) $("mode").value = st.mode;
+  if (st.view) $("view").value = st.view;
+  $("sortKeys").checked = !!st.sortKeys;
+  $("ignoreWs").checked = !!st.ignoreWs;
+  $("ignoreCase").checked = !!st.ignoreCase;
+}
+
+function persist() {
+  try { localStorage.setItem("difftool-state", JSON.stringify(collectState())); } catch (e) { /* quota */ }
+}
+
+// ---------- Theme ----------
+
+let themePref = localStorage.getItem("difftool-theme") || "auto";
+
+function applyTheme() {
+  const dark = themePref === "dark" || (themePref === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  $("theme").textContent = themePref === "auto" ? "🌓" : themePref === "light" ? "☀️" : "🌙";
+  $("theme").title = "Theme: " + themePref;
+}
+
+// ---------- Toast ----------
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
 // ---------- Main ----------
 
 function compare() {
   const mode = $("mode").value;
   const a = preprocess($("inputA").value, mode, $("statusA"));
   const b = preprocess($("inputB").value, mode, $("statusB"));
+  lastA = a.lines;
+  lastB = b.lines;
+  lastValues = { a: a.value, b: b.value };
 
-  const ops = diffLines(a, b);
-  const added = ops.filter(o => o.type === "add").length;
-  const removed = ops.filter(o => o.type === "del").length;
+  lastOps = diffCore(lastA.map(compareKey), lastB.map(compareKey));
+  lastRows = buildRows(lastOps, lastA, lastB);
+  expanded = new Set();
 
+  const added = lastOps.filter(o => o.type === "add").length;
+  const removed = lastOps.filter(o => o.type === "del").length;
   const stats = $("stats");
   if (added === 0 && removed === 0) {
-    stats.innerHTML = `<span class="same-msg">✓ Identical (${ops.length} lines)</span>`;
+    stats.innerHTML = `<span class="same-msg">✓ Identical (${lastOps.length} lines)</span>`;
   } else {
     stats.innerHTML =
       `<span class="added">+${added} added</span>` +
       `<span class="removed">−${removed} removed</span>` +
-      `<span class="same-msg">${ops.length - added - removed} unchanged</span>`;
+      `<span class="same-msg">${lastOps.length - added - removed} unchanged</span>`;
   }
 
-  render(ops, $("view").value);
+  $("tableLeft").className = "";
+  render();
   $("result").style.display = "block";
+  persist();
 }
 
+function hasResult() { return $("result").style.display === "block"; }
+function recompare() { if (hasResult()) compare(); }
+
 $("compare").addEventListener("click", compare);
-$("view").addEventListener("change", () => {
-  if ($("result").style.display === "block") compare();
-});
-$("sortKeys").addEventListener("change", () => {
-  if ($("result").style.display === "block") compare();
-});
+$("mode").addEventListener("change", recompare);
+$("view").addEventListener("change", () => { $("tableLeft").className = ""; recompare(); });
+for (const id of ["sortKeys", "ignoreWs", "ignoreCase"]) $(id).addEventListener("change", recompare);
+
 $("swap").addEventListener("click", () => {
   const a = $("inputA").value;
   $("inputA").value = $("inputB").value;
   $("inputB").value = a;
-  if ($("result").style.display === "block") compare();
+  recompare();
 });
+
 $("clear").addEventListener("click", () => {
   $("inputA").value = "";
   $("inputB").value = "";
   $("stats").innerHTML = "";
-  $("statusA").textContent = "";
-  $("statusB").textContent = "";
+  setStatus($("statusA"), "");
+  setStatus($("statusB"), "");
   $("result").style.display = "none";
+  history.replaceState(null, "", location.pathname);
+  persist();
 });
+
 $("sample").addEventListener("click", () => {
   $("inputA").value = JSON.stringify({
     name: "diff-tool", version: "1.0.0",
@@ -470,9 +999,122 @@ $("sample").addEventListener("click", () => {
   }, null, 2);
   compare();
 });
+
+$("theme").addEventListener("click", () => {
+  themePref = themePref === "auto" ? "light" : themePref === "light" ? "dark" : "auto";
+  localStorage.setItem("difftool-theme", themePref);
+  applyTheme();
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+
+$("share").addEventListener("click", async () => {
+  const encoded = await encodeState(collectState());
+  history.replaceState(null, "", "#" + encoded);
+  try {
+    await navigator.clipboard.writeText(location.href);
+    toast("Link copied to clipboard");
+  } catch (e) {
+    toast("Link is in the address bar (clipboard blocked)");
+  }
+});
+
+$("patch").addEventListener("click", async () => {
+  if (!hasResult()) compare();
+  const patch = makePatch(lastOps, lastA, lastB);
+  if (!patch) { toast("No differences — nothing to copy"); return; }
+  try {
+    await navigator.clipboard.writeText(patch);
+    toast("Patch copied to clipboard");
+  } catch (e) {
+    toast("Clipboard blocked by browser");
+  }
+});
+
+$("export").addEventListener("click", () => {
+  if (!hasResult()) compare();
+  const styles = document.querySelector("style").textContent;
+  const theme = document.documentElement.dataset.theme;
+  const html = `<!DOCTYPE html>
+<html data-theme="${theme}"><head><meta charset="utf-8"><title>Diff export</title>
+<style>${styles}</style></head>
+<body><div class="stats">${$("stats").innerHTML}</div>
+<div id="result" style="display:block">${$("diffGrid").outerHTML}</div></body></html>`;
+  const blob = new Blob([html], { type: "text/html" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "diff.html";
+  link.click();
+  URL.revokeObjectURL(link.href);
+  toast("diff.html downloaded");
+});
+
+// Expand collapsed regions (event delegation covers both tables).
+$("diffGrid").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr.collapse");
+  if (!tr) return;
+  expanded.add(Number(tr.dataset.start));
+  render();
+});
+
+// File open buttons + drag & drop.
+function loadFile(file, side) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    $("input" + side).value = reader.result;
+    recompare();
+  };
+  reader.readAsText(file);
+}
+
+for (const side of ["A", "B"]) {
+  $("file" + side).addEventListener("change", (e) => {
+    if (e.target.files[0]) loadFile(e.target.files[0], side);
+    e.target.value = "";
+  });
+  const pane = $("pane" + side);
+  pane.addEventListener("dragover", (e) => { e.preventDefault(); pane.classList.add("dragover"); });
+  pane.addEventListener("dragleave", () => pane.classList.remove("dragover"));
+  pane.addEventListener("drop", (e) => {
+    e.preventDefault();
+    pane.classList.remove("dragover");
+    if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0], side);
+  });
+}
+document.querySelectorAll("button.mini[data-side]").forEach(btn => {
+  btn.addEventListener("click", () => $("file" + btn.dataset.side).click());
+});
+
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") compare();
 });
+
+let persistTimer;
+for (const id of ["inputA", "inputB"]) {
+  $(id).addEventListener("input", () => {
+    clearTimeout(persistTimer);
+    persistTimer = setTimeout(persist, 500);
+  });
+}
+
+// ---------- Init: URL hash takes precedence over localStorage ----------
+
+(async function init() {
+  applyTheme();
+  if (location.hash.length > 1) {
+    try {
+      applyState(await decodeState(location.hash.slice(1)));
+      compare();
+      return;
+    } catch (e) { /* bad hash — fall through */ }
+  }
+  try {
+    const saved = localStorage.getItem("difftool-state");
+    if (saved) {
+      applyState(JSON.parse(saved));
+      if ($("inputA").value || $("inputB").value) compare();
+    }
+  } catch (e) { /* ignore corrupt state */ }
+})();
 </script>
 </body>
 </html>
