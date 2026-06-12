@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 630px;
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px;
+    position: relative;
+    overflow: hidden;
+  }
+  .glow {
+    position: absolute;
+    width: 700px;
+    height: 700px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(88,166,255,0.18) 0%, transparent 70%);
+    top: -200px;
+    right: -150px;
+  }
+  h1 { font-size: 92px; font-weight: 700; letter-spacing: -2px; }
+  h1 span { color: #58a6ff; }
+  p.tag { font-size: 34px; color: #8b949e; margin-top: 18px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 48px; max-width: 1000px; }
+  .chip {
+    font-size: 24px;
+    font-family: "SF Mono", Menlo, monospace;
+    color: #e6edf3;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 10px 22px;
+  }
+  .chip.hl { border-color: #58a6ff; color: #58a6ff; }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <h1>⚡ Dev<span>Tools</span></h1>
+  <p class="tag">14 offline developer tools — no server, nothing leaves your browser</p>
+  <div class="chips">
+    <span class="chip hl">diff</span>
+    <span class="chip">url</span>
+    <span class="chip">base64</span>
+    <span class="chip">jwt</span>
+    <span class="chip">timestamp</span>
+    <span class="chip">json</span>
+    <span class="chip">hash</span>
+    <span class="chip">uuid</span>
+    <span class="chip">regex</span>
+    <span class="chip">cron</span>
+    <span class="chip">color</span>
+    <span class="chip">qr</span>
+  </div>
+</body>
+</html>
