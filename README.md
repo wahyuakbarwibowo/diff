@@ -35,7 +35,20 @@ Optional local package-style workflow:
 ```bash
 npm start
 # or
-node ./bin/devtools.js --open
+node ./bin/devtools.js serve --open
+```
+
+CLI commands are also available for the most terminal-friendly tools:
+
+```bash
+node ./bin/devtools.js diff before.txt after.txt
+node ./bin/devtools.js json format '{"ok":true}'
+node ./bin/devtools.js jwt decode '<token>'
+node ./bin/devtools.js timestamp now
+node ./bin/devtools.js hash sha256 'hello'
+node ./bin/devtools.js case snake 'Hello World'
+node ./bin/devtools.js url inspect 'https://example.com?a=1'
+node ./bin/devtools.js uuid v7 3
 ```
 
 This keeps the no-build / no-dependency approach, but makes the toolset easier to run as a local package or CLI.

@@ -9,8 +9,8 @@
   },
   "scripts": {
     "start": "node ./bin/devtools.js",
-    "serve": "node ./bin/devtools.js",
-    "check": "node ./scripts/check-pages.mjs"
+    "serve": "node ./bin/devtools.js serve",
+    "check": "node ./scripts/check-pages.mjs && node ./scripts/check-cli.mjs"
   },
   "engines": {
     "node": ">=18"
