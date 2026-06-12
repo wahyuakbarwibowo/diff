@@ -292,7 +292,9 @@
     .sidebar {
       position: static;
       width: auto;
-      flex-direction: column;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
       gap: 10px;
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -300,8 +302,25 @@
       margin-bottom: 16px;
       overflow: visible;
     }
-    .sidebar nav { flex-direction: row; flex-wrap: wrap; }
-    .sidebar .gh { margin-top: 0; border-top: none; padding: 4px 10px 0; }
+    .sidebar .brand { flex: 1; padding: 0; }
+    .sidebar nav {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 6px;
+    }
+    .sidebar nav a {
+      border: 1px solid var(--border);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sidebar nav a.active { border-color: var(--accent); }
+    .sidebar .gh { margin: 0; border-top: none; padding: 0 2px; }
+    /* Even-width control rows instead of ragged wrapping */
+    .controls, .options { gap: 6px; }
+    .controls select, .controls button, .options button { flex: 1 1 auto; }
+    .controls button#theme { flex: 0 0 auto; }
+    .options label.checkbox { flex: 1 1 30%; }
     /* 16px stops iOS Safari from auto-zooming focused fields */
     textarea, select, input { font-size: 16px; }
   }
