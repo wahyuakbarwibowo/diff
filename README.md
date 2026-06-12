@@ -2,6 +2,8 @@
 
 A collection of offline developer tools. No build step, no dependencies, nothing leaves your browser — open any page and it works. A sidebar links all tools.
 
+**Live:** https://wahyuakbarwibowo.github.io/diff/ · **Source:** https://github.com/wahyuakbarwibowo/diff
+
 | Page | Tool |
 |---|---|
 | `index.html` | **Diff** — compare text / JSON / YAML / XML / CSV (details below) |
