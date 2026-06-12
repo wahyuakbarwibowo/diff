@@ -5,7 +5,7 @@
   "description": "Offline browser-based developer tools with an optional local server CLI.",
   "type": "module",
   "bin": {
-    "devtools-offline": "./bin/devtools.js"
+    "dtool": "./bin/devtools.js"
   },
   "scripts": {
     "start": "node ./bin/devtools.js",
