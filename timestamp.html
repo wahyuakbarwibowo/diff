@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timestamp Tool — Unix Epoch ↔ Date Converter</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  #inputRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  #inputRow input.text { flex: 1; min-width: 260px; font-size: 15px; padding: 10px 12px; }
+  #now { font-variant-numeric: tabular-nums; }
+  td.v button.mini { float: right; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Time<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="nowBtn" class="primary">Now</button>
+  </div>
+</header>
+
+<div id="inputRow">
+  <input class="text" id="input" type="text"
+         placeholder="Unix epoch (s / ms / µs auto-detected) or any date string, e.g. 2026-06-12T10:00:00+07:00"
+         spellcheck="false">
+  <span class="status" id="status"></span>
+</div>
+
+<div class="card"><table class="kv" id="out"></table></div>
+
+<div class="card"><table class="kv" id="live">
+  <tr><td class="section" colspan="2">current time (live)</td></tr>
+  <tr><td class="k">unix seconds</td><td class="v" id="nowS"></td></tr>
+  <tr><td class="k">unix millis</td><td class="v" id="nowMs"></td></tr>
+  <tr><td class="k">ISO 8601 UTC</td><td class="v" id="nowIso"></td></tr>
+  <tr><td class="k">local</td><td class="v" id="nowLocal"></td></tr>
+</table></div>
+
+<p class="hint">Numbers are auto-detected: 10 digits → seconds, 13 → milliseconds, 16 → microseconds · anything else is parsed as a date string · click 📋 on any row to copy</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+function parseInput(raw) {
+  raw = raw.trim();
+  if (raw === "") return null;
+  if (/^-?\d+$/.test(raw)) {
+    const n = Number(raw);
+    const len = raw.replace("-", "").length;
+    if (len >= 16) return { date: new Date(n / 1000), note: "epoch microseconds" };
+    if (len >= 12) return { date: new Date(n), note: "epoch milliseconds" };
+    return { date: new Date(n * 1000), note: "epoch seconds" };
+  }
+  const t = Date.parse(raw);
+  if (Number.isNaN(t)) return { error: "cannot parse as number or date" };
+  return { date: new Date(t), note: "date string" };
+}
+
+function relative(date) {
+  const diff = date.getTime() - Date.now();
+  const abs = Math.abs(diff);
+  const units = [[31557600000, "year"], [2629800000, "month"], [86400000, "day"],
+                 [3600000, "hour"], [60000, "minute"], [1000, "second"]];
+  for (const [ms, name] of units) {
+    if (abs >= ms) {
+      const n = Math.round(abs / ms);
+      return `${n} ${name}${n > 1 ? "s" : ""} ${diff < 0 ? "ago" : "from now"}`;
+    }
+  }
+  return "now";
+}
+
+function row(key, val) {
+  return `<tr><td class="k">${esc(key)}</td><td class="v">${esc(val)}` +
+         `<button class="mini" data-copy="${esc(val)}" title="Copy">📋</button></td></tr>`;
+}
+
+function render() {
+  const out = $("out");
+  const parsed = parseInput($("input").value);
+  setStatus($("status"), "");
+  if (!parsed) {
+    out.innerHTML = `<tr><td class="section">Enter a timestamp or date above.</td></tr>`;
+    return;
+  }
+  if (parsed.error || Number.isNaN(parsed.date.getTime())) {
+    setStatus($("status"), parsed.error || "invalid date", "err");
+    return;
+  }
+  const d = parsed.date;
+  setStatus($("status"), "parsed as " + parsed.note, "ok");
+  out.innerHTML = [
+    row("unix seconds", String(Math.floor(d.getTime() / 1000))),
+    row("unix millis", String(d.getTime())),
+    row("ISO 8601 UTC", d.toISOString()),
+    row("local (" + TZ + ")", d.toLocaleString(undefined, { dateStyle: "full", timeStyle: "long" })),
+    row("relative", relative(d)),
+    row("day of week", d.toLocaleDateString(undefined, { weekday: "long" })),
+  ].join("");
+}
+
+function tick() {
+  const now = new Date();
+  $("nowS").textContent = String(Math.floor(now.getTime() / 1000));
+  $("nowMs").textContent = String(now.getTime());
+  $("nowIso").textContent = now.toISOString();
+  $("nowLocal").textContent = now.toLocaleString() + " (" + TZ + ")";
+}
+
+$("input").addEventListener("input", render);
+$("nowBtn").addEventListener("click", () => {
+  $("input").value = String(Math.floor(Date.now() / 1000));
+  render();
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-copy]");
+  if (btn) copyText(btn.dataset.copy, "Copied");
+});
+
+tick();
+setInterval(tick, 1000);
+render();
+</script>
+</body>
+</html>

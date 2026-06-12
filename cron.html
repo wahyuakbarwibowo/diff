@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cron Tool — Parse Cron Expressions</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  #inputRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  #input { flex: 1; min-width: 260px; font-size: 16px; padding: 10px 12px; letter-spacing: 1px; }
+  .presets button { font-family: var(--mono); font-size: 12px; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Cron<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+  </div>
+</header>
+
+<div id="inputRow">
+  <input class="text" id="input" type="text" value="*/15 9-17 * * 1-5" spellcheck="false"
+         placeholder="minute hour day-of-month month day-of-week">
+  <span class="status" id="status"></span>
+</div>
+
+<div class="options presets">
+  <button data-cron="* * * * *">* * * * *</button>
+  <button data-cron="*/5 * * * *">*/5 * * * *</button>
+  <button data-cron="0 * * * *">0 * * * *</button>
+  <button data-cron="0 0 * * *">0 0 * * *</button>
+  <button data-cron="0 9 * * 1-5">0 9 * * 1-5</button>
+  <button data-cron="0 0 1 * *">0 0 1 * *</button>
+  <button data-cron="30 2 * * 0">30 2 * * 0</button>
+</div>
+
+<div class="card"><table class="kv" id="fields"></table></div>
+<div class="card"><table class="kv" id="next"></table></div>
+
+<p class="hint">Standard 5-field cron · names accepted (jan-dec, sun-sat) · when both day-of-month and day-of-week are restricted, a run happens if either matches (POSIX behaviour)</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const FIELD_DEFS = [
+  { name: "minute", min: 0, max: 59 },
+  { name: "hour", min: 0, max: 23 },
+  { name: "day of month", min: 1, max: 31 },
+  { name: "month", min: 1, max: 12, names: ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"] },
+  { name: "day of week", min: 0, max: 7, names: ["sun","mon","tue","wed","thu","fri","sat"] },
+];
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOWS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+function resolveToken(tok, def) {
+  if (def.names) {
+    const idx = def.names.indexOf(tok.toLowerCase());
+    if (idx !== -1) return def.min === 1 ? idx + 1 : idx;
+  }
+  if (!/^\d+$/.test(tok)) throw new Error(`bad value "${tok}" in ${def.name}`);
+  return Number(tok);
+}
+
+// Returns { set: Set<number>, star: boolean, desc: string }
+function parseField(expr, def) {
+  const set = new Set();
+  const descs = [];
+  let star = expr === "*";
+  for (const part of expr.split(",")) {
+    const [rangePart, stepPart] = part.split("/");
+    const step = stepPart === undefined ? 1 : Number(stepPart);
+    if (!step || step < 1) throw new Error(`bad step "/${stepPart}" in ${def.name}`);
+    let lo, hi;
+    if (rangePart === "*") { lo = def.min; hi = def.max; }
+    else if (rangePart.includes("-")) {
+      const [a, b] = rangePart.split("-");
+      lo = resolveToken(a, def); hi = resolveToken(b, def);
+    } else {
+      lo = hi = resolveToken(rangePart, def);
+      if (stepPart !== undefined) hi = def.max;
+    }
+    if (lo < def.min || hi > def.max || lo > hi) throw new Error(`"${part}" out of range ${def.min}-${def.max} in ${def.name}`);
+    for (let v = lo; v <= hi; v += step) set.add(v === 7 && def.max === 7 ? 0 : v);
+
+    const label = (v) =>
+      def.name === "month" ? MONTHS[v - 1] :
+      def.name === "day of week" ? DOWS[v % 7] : String(v);
+    if (rangePart === "*" && step === 1) descs.push("every " + def.name);
+    else if (rangePart === "*") descs.push(`every ${step} ${def.name}s`);
+    else if (lo === hi && stepPart === undefined) descs.push(label(lo));
+    else if (stepPart === undefined) descs.push(`${label(lo)} through ${label(hi)}`);
+    else descs.push(`every ${step} from ${label(lo)} through ${label(hi)}`);
+  }
+  return { set, star, desc: descs.join(", ") };
+}
+
+function parseCron(text) {
+  const fields = text.trim().split(/\s+/);
+  if (fields.length !== 5) throw new Error(`expected 5 fields, got ${fields.length}`);
+  return FIELD_DEFS.map((def, i) => ({ def, raw: fields[i], ...parseField(fields[i], def) }));
+}
+
+function nextRuns(parsed, count) {
+  const [min, hour, dom, mon, dow] = parsed;
+  const runs = [];
+  const d = new Date();
+  d.setSeconds(0, 0);
+  d.setMinutes(d.getMinutes() + 1);
+  const limit = new Date(d.getTime() + 5 * 366 * 86400000);
+
+  while (runs.length < count && d < limit) {
+    if (!mon.set.has(d.getMonth() + 1)) {
+      d.setMonth(d.getMonth() + 1, 1);
+      d.setHours(0, 0, 0, 0);
+      continue;
+    }
+    // POSIX: if both dom and dow are restricted, either may match.
+    const domOk = dom.set.has(d.getDate());
+    const dowOk = dow.set.has(d.getDay());
+    const dayOk = dom.star && dow.star ? true
+      : dom.star ? dowOk
+      : dow.star ? domOk
+      : domOk || dowOk;
+    if (!dayOk) {
+      d.setDate(d.getDate() + 1);
+      d.setHours(0, 0, 0, 0);
+      continue;
+    }
+    if (!hour.set.has(d.getHours())) {
+      d.setHours(d.getHours() + 1, 0, 0, 0);
+      continue;
+    }
+    if (!min.set.has(d.getMinutes())) {
+      d.setMinutes(d.getMinutes() + 1);
+      continue;
+    }
+    runs.push(new Date(d));
+    d.setMinutes(d.getMinutes() + 1);
+  }
+  return runs;
+}
+
+function relative(date) {
+  const diff = date.getTime() - Date.now();
+  const units = [[86400000, "day"], [3600000, "hour"], [60000, "minute"]];
+  for (const [ms, name] of units) {
+    if (diff >= ms) {
+      const n = Math.round(diff / ms);
+      return `in ${n} ${name}${n > 1 ? "s" : ""}`;
+    }
+  }
+  return "in <1 minute";
+}
+
+function render() {
+  setStatus($("status"), "");
+  let parsed;
+  try {
+    parsed = parseCron($("input").value);
+  } catch (e) {
+    setStatus($("status"), e.message, "err");
+    $("fields").innerHTML = "";
+    $("next").innerHTML = "";
+    return;
+  }
+  setStatus($("status"), "valid", "ok");
+
+  $("fields").innerHTML =
+    `<tr><td class="section" colspan="3">field breakdown</td></tr>` +
+    parsed.map(f =>
+      `<tr><td class="k">${esc(f.raw)}</td><td class="k" style="color:var(--muted)">${f.def.name}</td><td class="v">${esc(f.desc)}</td></tr>`
+    ).join("");
+
+  const runs = nextRuns(parsed, 5);
+  $("next").innerHTML =
+    `<tr><td class="section" colspan="2">next ${runs.length} runs (local time)</td></tr>` +
+    (runs.length
+      ? runs.map(r =>
+          `<tr><td class="k">${esc(relative(r))}</td><td class="v">${esc(r.toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" }))}</td></tr>`
+        ).join("")
+      : `<tr><td class="v">no runs in the next 5 years (impossible date combination?)</td></tr>`);
+}
+
+$("input").addEventListener("input", render);
+document.querySelectorAll(".presets button").forEach(b =>
+  b.addEventListener("click", () => { $("input").value = b.dataset.cron; render(); })
+);
+render();
+</script>
+</body>
+</html>

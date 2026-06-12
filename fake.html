@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fake Data Tool — Lorem Ipsum, Names, JSON</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  textarea { height: 320px; }
+  #count { width: 70px; }
+  #countWrap { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Fake<span>Data</span></h1>
+  <div class="controls">
+    <select id="kind">
+      <option value="paragraphs">Lorem — paragraphs</option>
+      <option value="sentences">Lorem — sentences</option>
+      <option value="words">Lorem — words</option>
+      <option value="names">Names</option>
+      <option value="emails">Emails</option>
+      <option value="users">JSON users</option>
+      <option value="numbers">Phone numbers (+62)</option>
+    </select>
+    <span id="countWrap">× <input class="text" id="count" type="number" min="1" max="500" value="3"></span>
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="gen" class="primary">Generate</button>
+  </div>
+</header>
+
+<div class="options">
+  <button id="copy">📋 Copy</button>
+  <button id="clear">Clear</button>
+</div>
+
+<div class="pane">
+  <div class="pane-header">
+    <span>Output</span>
+    <span class="status" id="status"></span>
+  </div>
+  <textarea id="out" spellcheck="false" readonly placeholder="Click Generate…"></textarea>
+</div>
+
+<p class="hint">All data is randomly assembled placeholder content — any resemblance to real people is coincidental</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const LOREM = ("lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore " +
+  "et dolore magna aliqua enim ad minim veniam quis nostrud exercitation ullamco laboris nisi aliquip ex ea commodo " +
+  "consequat duis aute irure in reprehenderit voluptate velit esse cillum eu fugiat nulla pariatur excepteur sint " +
+  "occaecat cupidatat non proident sunt culpa qui officia deserunt mollit anim id est laborum").split(" ");
+
+const FIRST = ["Adi","Budi","Citra","Dewi","Eko","Fitri","Gita","Hendra","Indah","Joko",
+               "Alice","Bob","Carol","David","Emma","Frank","Grace","Henry","Iris","Jack",
+               "Kemal","Laras","Maya","Nanda","Oscar","Putri","Rizky","Sari","Tono","Wulan"];
+const LAST = ["Santoso","Wijaya","Pratama","Saputra","Utami","Halim","Kusuma","Hartono","Susanto","Lestari",
+              "Smith","Johnson","Brown","Taylor","Anderson","Martin","Clark","Lewis","Walker","Young"];
+const DOMAINS = ["example.com","mail.test","demo.dev","corp.example","inbox.test"];
+const ROLES = ["admin","editor","viewer","owner","support"];
+const CITIES = ["Jakarta","Bandung","Surabaya","Yogyakarta","Medan","Denpasar","Makassar","Semarang"];
+
+const rand = (n) => Math.floor(Math.random() * n);
+const pick = (arr) => arr[rand(arr.length)];
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+
+function sentence() {
+  const n = 6 + rand(10);
+  const words = Array.from({ length: n }, () => pick(LOREM));
+  return cap(words.join(" ")) + ".";
+}
+
+function paragraph() {
+  return Array.from({ length: 3 + rand(4) }, sentence).join(" ");
+}
+
+function fullName() { return pick(FIRST) + " " + pick(LAST); }
+
+function email(name) {
+  const base = (name || fullName()).toLowerCase().replace(/\s+/g, ".");
+  return base + (rand(3) ? "" : String(10 + rand(90))) + "@" + pick(DOMAINS);
+}
+
+function phone() {
+  let s = "+62 8" + (1 + rand(9));
+  for (let i = 0; i < 9; i++) s += rand(10);
+  return s.slice(0, 7) + "-" + s.slice(7, 11) + "-" + s.slice(11);
+}
+
+function user(id) {
+  const name = fullName();
+  return {
+    id: id + 1,
+    name,
+    email: email(name),
+    role: pick(ROLES),
+    city: pick(CITIES),
+    active: rand(4) > 0,
+    createdAt: new Date(Date.now() - rand(730) * 86400000).toISOString().slice(0, 10),
+  };
+}
+
+function generate() {
+  const kind = $("kind").value;
+  const n = Math.min(500, Math.max(1, Number($("count").value) || 1));
+  let out;
+  if (kind === "paragraphs") out = Array.from({ length: n }, paragraph).join("\n\n");
+  else if (kind === "sentences") out = Array.from({ length: n }, sentence).join("\n");
+  else if (kind === "words") out = Array.from({ length: n }, () => pick(LOREM)).join(" ");
+  else if (kind === "names") out = Array.from({ length: n }, fullName).join("\n");
+  else if (kind === "emails") out = Array.from({ length: n }, () => email()).join("\n");
+  else if (kind === "numbers") out = Array.from({ length: n }, phone).join("\n");
+  else out = JSON.stringify(Array.from({ length: n }, (_, i) => user(i)), null, 2);
+  $("out").value = out;
+  setStatus($("status"), `${n} × ${kind}`, "ok");
+}
+
+$("gen").addEventListener("click", generate);
+$("kind").addEventListener("change", generate);
+$("copy").addEventListener("click", () => copyText($("out").value, "Copied"));
+$("clear").addEventListener("click", () => { $("out").value = ""; setStatus($("status"), ""); });
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate();
+});
+
+generate();
+</script>
+</body>
+</html>

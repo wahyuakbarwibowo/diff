@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ID Tool — UUID v4 / v7 &amp; ULID Generator</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  textarea { height: 280px; }
+  #countWrap { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  #count { width: 70px; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ ID<span>Tool</span></h1>
+  <div class="controls">
+    <select id="kind">
+      <option value="v4">UUID v4 (random)</option>
+      <option value="v7">UUID v7 (time-ordered)</option>
+      <option value="ulid">ULID</option>
+      <option value="nil">Nil UUID</option>
+    </select>
+    <span id="countWrap">× <input class="text" id="count" type="number" min="1" max="1000" value="5"></span>
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="gen" class="primary">Generate</button>
+  </div>
+</header>
+
+<div class="options">
+  <label class="checkbox"><input type="checkbox" id="upper"> UPPERCASE</label>
+  <label class="checkbox"><input type="checkbox" id="noDash"> No dashes (UUID only)</label>
+  <button id="copy">📋 Copy all</button>
+  <button id="clear">Clear</button>
+</div>
+
+<div class="pane">
+  <div class="pane-header">
+    <span>Generated IDs</span>
+    <span class="status" id="status"></span>
+  </div>
+  <textarea id="out" placeholder="Click Generate…" spellcheck="false" readonly></textarea>
+</div>
+
+<p class="hint">UUID v7 and ULID sort chronologically — good for database keys · all randomness comes from crypto.getRandomValues</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+function uuidV4() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  return fmtUuid(b);
+}
+
+function uuidV7() {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  const t = Date.now();
+  b[0] = (t / 2 ** 40) & 0xff;
+  b[1] = (t / 2 ** 32) & 0xff;
+  b[2] = (t / 2 ** 24) & 0xff;
+  b[3] = (t / 2 ** 16) & 0xff;
+  b[4] = (t / 2 ** 8) & 0xff;
+  b[5] = t & 0xff;
+  b[6] = (b[6] & 0x0f) | 0x70; // version 7
+  b[8] = (b[8] & 0x3f) | 0x80; // variant 10
+  return fmtUuid(b);
+}
+
+function fmtUuid(b) {
+  const h = [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+function ulid() {
+  let t = Date.now();
+  let time = "";
+  for (let i = 0; i < 10; i++) {
+    time = CROCKFORD[t % 32] + time;
+    t = Math.floor(t / 32);
+  }
+  const rnd = crypto.getRandomValues(new Uint8Array(16));
+  let rand = "";
+  for (let i = 0; i < 16; i++) rand += CROCKFORD[rnd[i] & 31];
+  return time + rand;
+}
+
+function generate() {
+  const kind = $("kind").value;
+  const n = Math.min(1000, Math.max(1, Number($("count").value) || 1));
+  const make = { v4: uuidV4, v7: uuidV7, ulid, nil: () => "00000000-0000-0000-0000-000000000000" }[kind];
+  let ids = Array.from({ length: n }, make);
+  if ($("noDash").checked && kind !== "ulid") ids = ids.map(s => s.replace(/-/g, ""));
+  if ($("upper").checked) ids = ids.map(s => s.toUpperCase());
+  $("out").value = ids.join("\n");
+  setStatus($("status"), `${n} × ${kind === "ulid" ? "ULID" : "UUID " + kind}`, "ok");
+}
+
+$("gen").addEventListener("click", generate);
+for (const id of ["kind", "upper", "noDash"]) $(id).addEventListener("change", generate);
+$("copy").addEventListener("click", () => copyText($("out").value, "IDs copied"));
+$("clear").addEventListener("click", () => { $("out").value = ""; setStatus($("status"), ""); });
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate();
+});
+
+generate();
+</script>
+</body>
+</html>

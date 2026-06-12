@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>URL Tool — Encode / Decode URLs</title>
+<link rel="stylesheet" href="assets/common.css">
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ URL<span>Tool</span></h1>
+  <div class="controls">
+    <select id="fn" title="Encoding function">
+      <option value="component">encodeURIComponent</option>
+      <option value="uri">encodeURI</option>
+    </select>
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="encode" class="primary">Encode →</button>
+    <button id="decode" class="primary">← Decode</button>
+  </div>
+</header>
+
+<div class="options">
+  <label class="checkbox"><input type="checkbox" id="eachLine"> Each line separately</label>
+  <label class="checkbox"><input type="checkbox" id="plusSpace"> + as space (form encoding)</label>
+  <button id="swap" title="Swap input and output">⇄ Swap</button>
+  <button id="sample">Sample</button>
+  <button id="clear">Clear</button>
+  <button id="copy" title="Copy output to clipboard">📋 Copy output</button>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-header">
+      <span>Input</span>
+      <span class="status" id="statusIn"></span>
+    </div>
+    <textarea id="input" placeholder="Paste text or URL here…" spellcheck="false"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-header">
+      <span>Output</span>
+      <span class="status" id="statusOut"></span>
+    </div>
+    <textarea id="output" placeholder="Result appears here…" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<div class="card" id="breakdown" style="display:none"><table class="kv" id="breakdownTable"></table></div>
+
+<p class="hint">Ctrl/Cmd + Enter to encode · Ctrl/Cmd + Shift + Enter to decode · paste a full URL into the input to see its parts and query parameters below</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+function encodeOne(text) {
+  let out = $("fn").value === "uri" ? encodeURI(text) : encodeURIComponent(text);
+  if ($("plusSpace").checked) out = out.replace(/%20/g, "+");
+  return out;
+}
+
+function decodeOne(text) {
+  if ($("plusSpace").checked) text = text.replace(/\+/g, "%20");
+  return decodeURIComponent(text);
+}
+
+function run(fn) {
+  const text = $("input").value;
+  setStatus($("statusIn"), "");
+  setStatus($("statusOut"), "");
+  if (text === "") { $("output").value = ""; renderBreakdown(); return; }
+  try {
+    const result = $("eachLine").checked
+      ? text.split("\n").map(fn).join("\n")
+      : fn(text);
+    $("output").value = result;
+    setStatus($("statusOut"), fn === encodeOne ? "encoded" : "decoded", "ok");
+  } catch (e) {
+    setStatus($("statusOut"), e.message, "err");
+  }
+  renderBreakdown();
+  persist();
+}
+
+// ---------- URL breakdown ----------
+
+function breakdownRows(url) {
+  const rows = [];
+  const part = (key, val) => {
+    if (val) rows.push(`<tr><td class="k">${esc(key)}</td><td class="v">${esc(val)}</td></tr>`);
+  };
+  part("protocol", url.protocol);
+  part("username", url.username);
+  part("password", url.password);
+  part("hostname", url.hostname);
+  part("port", url.port);
+  part("pathname", url.pathname === "/" ? "" : url.pathname);
+  part("hash", url.hash);
+  const params = [...url.searchParams];
+  if (params.length) {
+    rows.push(`<tr><td class="section" colspan="2">query parameters (decoded)</td></tr>`);
+    for (const [k, v] of params) {
+      rows.push(`<tr><td class="k">${esc(k)}</td><td class="v">${esc(v)}</td></tr>`);
+    }
+  }
+  return rows;
+}
+
+function renderBreakdown() {
+  const box = $("breakdown");
+  const input = $("input").value.trim();
+  let url = null;
+  try {
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(input)) url = new URL(input);
+  } catch (e) { /* not a parseable URL */ }
+  if (!url) { box.style.display = "none"; return; }
+  $("breakdownTable").innerHTML = breakdownRows(url).join("");
+  box.style.display = "block";
+}
+
+// ---------- Persistence ----------
+
+function persist() {
+  try {
+    localStorage.setItem("urltool-state", JSON.stringify({
+      input: $("input").value,
+      fn: $("fn").value,
+      eachLine: $("eachLine").checked,
+      plusSpace: $("plusSpace").checked,
+    }));
+  } catch (e) { /* quota */ }
+}
+
+// ---------- Wiring ----------
+
+$("encode").addEventListener("click", () => run(encodeOne));
+$("decode").addEventListener("click", () => run(decodeOne));
+
+$("swap").addEventListener("click", () => {
+  const a = $("input").value;
+  $("input").value = $("output").value;
+  $("output").value = a;
+  setStatus($("statusOut"), "");
+  renderBreakdown();
+  persist();
+});
+
+$("clear").addEventListener("click", () => {
+  $("input").value = "";
+  $("output").value = "";
+  setStatus($("statusIn"), "");
+  setStatus($("statusOut"), "");
+  renderBreakdown();
+  persist();
+});
+
+$("sample").addEventListener("click", () => {
+  $("input").value = "https://example.com/search?q=café au lait&lang=en&filter=price > 10";
+  run(encodeOne);
+});
+
+$("copy").addEventListener("click", () => copyText($("output").value, "Output copied to clipboard"));
+
+$("input").addEventListener("input", () => {
+  renderBreakdown();
+  clearTimeout($("input")._t);
+  $("input")._t = setTimeout(persist, 500);
+});
+
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    run(e.shiftKey ? decodeOne : encodeOne);
+  }
+});
+
+(function init() {
+  try {
+    const saved = localStorage.getItem("urltool-state");
+    if (saved) {
+      const st = JSON.parse(saved);
+      $("input").value = st.input ?? "";
+      if (st.fn) $("fn").value = st.fn;
+      $("eachLine").checked = !!st.eachLine;
+      $("plusSpace").checked = !!st.plusSpace;
+      renderBreakdown();
+    }
+  } catch (e) { /* ignore corrupt state */ }
+})();
+</script>
+</body>
+</html>

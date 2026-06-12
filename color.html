@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Color Tool — Convert Hex / RGB / HSL, WCAG Contrast</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  #inputRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  #input { flex: 1; min-width: 220px; font-size: 15px; padding: 10px 12px; }
+  #picker { width: 48px; height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); cursor: pointer; }
+  #swatch {
+    height: 80px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  td.v button.mini { float: right; }
+  .pass { color: var(--ok); font-weight: 600; }
+  .fail { color: var(--bad); font-weight: 600; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Color<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+  </div>
+</header>
+
+<div id="inputRow">
+  <input type="color" id="picker" value="#58a6ff" title="Pick a color">
+  <input class="text" id="input" type="text" value="#58a6ff" spellcheck="false"
+         placeholder="#58a6ff · rgb(88,166,255) · hsl(212 100% 67%) · rebeccapurple">
+  <span class="status" id="status"></span>
+</div>
+
+<div id="swatch">
+  <span style="color:#fff">white text</span>
+  <span style="color:#000">black text</span>
+</div>
+
+<div class="card"><table class="kv" id="out"></table></div>
+<div class="card"><table class="kv" id="contrast"></table></div>
+
+<p class="hint">Accepts any CSS color (hex, rgb(), hsl(), named) · WCAG: normal text needs 4.5:1 (AA) / 7:1 (AAA), large text 3:1 / 4.5:1</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const ctx = document.createElement("canvas").getContext("2d");
+
+// Normalize any CSS color via canvas; returns [r,g,b] or null.
+function parseColor(str) {
+  ctx.fillStyle = "#000";
+  ctx.fillStyle = str;
+  const black = ctx.fillStyle;
+  ctx.fillStyle = "#fff";
+  ctx.fillStyle = str;
+  if (ctx.fillStyle !== black) return null; // invalid input kept previous fillStyle
+  const m = black.match(/^#([0-9a-f]{6})$/i);
+  if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16)];
+  const rgb = black.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  return null;
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+
+function luminance(r, g, b) {
+  const f = (c) => {
+    c /= 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+function contrastRatio(l1, l2) {
+  const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function row(key, val) {
+  return `<tr><td class="k">${esc(key)}</td><td class="v">${esc(val)}` +
+         `<button class="mini" data-copy="${esc(val)}" title="Copy">📋</button></td></tr>`;
+}
+
+function wcag(ratio, threshold) {
+  return ratio >= threshold
+    ? `<span class="pass">✓ pass</span>`
+    : `<span class="fail">✗ fail</span>`;
+}
+
+function render(fromPicker) {
+  const str = fromPicker ? $("picker").value : $("input").value.trim();
+  const rgb = parseColor(str);
+  if (!rgb) {
+    setStatus($("status"), "not a valid CSS color", "err");
+    return;
+  }
+  setStatus($("status"), "valid", "ok");
+  const [r, g, b] = rgb.map(Math.round);
+  const hex = "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join("");
+  const [h, s, l] = rgbToHsl(r, g, b);
+  const hsl = `hsl(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
+
+  if (fromPicker) $("input").value = hex;
+  $("picker").value = hex;
+  $("swatch").style.background = hex;
+
+  $("out").innerHTML = [
+    row("hex", hex),
+    row("rgb", `rgb(${r}, ${g}, ${b})`),
+    row("hsl", hsl),
+    row("luminance", luminance(r, g, b).toFixed(4)),
+  ].join("");
+
+  const lum = luminance(r, g, b);
+  const vsWhite = contrastRatio(lum, 1);
+  const vsBlack = contrastRatio(lum, 0);
+  $("contrast").innerHTML =
+    `<tr><td class="section" colspan="4">WCAG contrast</td></tr>` +
+    `<tr><td class="k">vs white</td><td class="v">${vsWhite.toFixed(2)}:1</td>` +
+    `<td class="v">AA ${wcag(vsWhite, 4.5)}</td><td class="v">AAA ${wcag(vsWhite, 7)}</td></tr>` +
+    `<tr><td class="k">vs black</td><td class="v">${vsBlack.toFixed(2)}:1</td>` +
+    `<td class="v">AA ${wcag(vsBlack, 4.5)}</td><td class="v">AAA ${wcag(vsBlack, 7)}</td></tr>` +
+    `<tr><td class="k">best text color</td><td class="v" colspan="3">${vsWhite >= vsBlack ? "white" : "black"}</td></tr>`;
+}
+
+$("input").addEventListener("input", () => render(false));
+$("picker").addEventListener("input", () => render(true));
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-copy]");
+  if (btn) copyText(btn.dataset.copy, "Copied");
+});
+render(false);
+</script>
+</body>
+</html>

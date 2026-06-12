@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON Tool — Format, Validate, Convert</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  textarea { height: 320px; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ JSON<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="format" class="primary">Format</button>
+    <button id="minify">Minify</button>
+    <button id="toYaml">→ YAML</button>
+    <button id="toCsv">→ CSV</button>
+  </div>
+</header>
+
+<div class="options">
+  <label class="checkbox"><input type="checkbox" id="sortKeys"> Sort keys</label>
+  <select id="indent" title="Indentation">
+    <option value="2">2 spaces</option>
+    <option value="4">4 spaces</option>
+    <option value="tab">Tabs</option>
+  </select>
+  <button id="useOutput" title="Move output back to input">↰ Use output as input</button>
+  <button id="sample">Sample</button>
+  <button id="clear">Clear</button>
+  <button id="copy">📋 Copy output</button>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-header">
+      <span>Input JSON</span>
+      <span class="status" id="statusIn"></span>
+    </div>
+    <textarea id="input" placeholder="Paste JSON here… (trailing commas are tolerated)" spellcheck="false"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-header">
+      <span>Output</span>
+      <span class="status" id="statusOut"></span>
+    </div>
+    <textarea id="output" placeholder="Result appears here…" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<p class="hint">Ctrl/Cmd + Enter to format · CSV conversion expects an array of objects (nested values are JSON-stringified) · validation runs as you type</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+function sortKeysDeep(value) {
+  if (Array.isArray(value)) return value.map(sortKeysDeep);
+  if (value !== null && typeof value === "object") {
+    const out = {};
+    for (const key of Object.keys(value).sort()) out[key] = sortKeysDeep(value[key]);
+    return out;
+  }
+  return value;
+}
+
+function parseJsonLoose(text) {
+  try {
+    return { value: JSON.parse(text), note: "" };
+  } catch (firstErr) {
+    try {
+      const stripped = text.replace(/,\s*([}\]])/g, "$1");
+      return { value: JSON.parse(stripped), note: " (trailing commas fixed)" };
+    } catch (e) {
+      throw firstErr;
+    }
+  }
+}
+
+function getValue() {
+  const text = $("input").value.trim();
+  if (!text) throw new Error("input is empty");
+  const { value, note } = parseJsonLoose(text);
+  setStatus($("statusIn"), "valid JSON" + note, "ok");
+  return $("sortKeys").checked ? sortKeysDeep(value) : value;
+}
+
+function indentArg() {
+  const v = $("indent").value;
+  return v === "tab" ? "\t" : Number(v);
+}
+
+// ---------- JSON → YAML ----------
+
+function yamlScalarStr(s) {
+  if (s === "" || /^[\s\-?:,[\]{}#&*!|>'"%@`]|[\s:#]|^(true|false|null|~|yes|no|on|off)$|^[-+]?[\d.]/i.test(s) || /\n/.test(s)) {
+    return JSON.stringify(s);
+  }
+  return s;
+}
+
+function toYaml(value, indent = 0) {
+  const pad = "  ".repeat(indent);
+  if (value === null) return "null";
+  if (typeof value === "boolean" || typeof value === "number") return String(value);
+  if (typeof value === "string") return yamlScalarStr(value);
+  if (Array.isArray(value)) {
+    if (!value.length) return "[]";
+    return value.map(v => {
+      const inner = toYaml(v, indent + 1);
+      if (v !== null && typeof v === "object" && Object.keys(v).length) {
+        return pad + "- " + inner.replace(/^\s*/, "").split("\n").map((l, i) => i === 0 ? l : "  " + l).join("\n");
+      }
+      return pad + "- " + inner;
+    }).join("\n");
+  }
+  const keys = Object.keys(value);
+  if (!keys.length) return "{}";
+  return keys.map(k => {
+    const v = value[k];
+    const key = yamlScalarStr(k);
+    if (v !== null && typeof v === "object" && (Array.isArray(v) ? v.length : Object.keys(v).length)) {
+      return pad + key + ":\n" + toYaml(v, indent + 1);
+    }
+    return pad + key + ": " + toYaml(v, indent);
+  }).join("\n");
+}
+
+// ---------- JSON → CSV ----------
+
+function csvCell(v) {
+  if (v === null || v === undefined) return "";
+  const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function toCsv(value) {
+  if (!Array.isArray(value)) throw new Error("CSV needs a JSON array");
+  if (!value.length) return "";
+  if (value.every(r => r === null || typeof r !== "object")) {
+    return value.map(csvCell).join("\n");
+  }
+  const cols = [];
+  for (const rowObj of value) {
+    for (const k of Object.keys(rowObj || {})) if (!cols.includes(k)) cols.push(k);
+  }
+  const lines = [cols.map(csvCell).join(",")];
+  for (const rowObj of value) {
+    lines.push(cols.map(c => csvCell(rowObj ? rowObj[c] : "")).join(","));
+  }
+  return lines.join("\n");
+}
+
+// ---------- Actions ----------
+
+function act(fn, okMsg) {
+  setStatus($("statusOut"), "");
+  try {
+    $("output").value = fn();
+    setStatus($("statusOut"), okMsg, "ok");
+  } catch (e) {
+    setStatus($("statusOut"), e.message, "err");
+    if (e instanceof SyntaxError) setStatus($("statusIn"), "invalid JSON: " + e.message, "err");
+  }
+}
+
+$("format").addEventListener("click", () => act(() => JSON.stringify(getValue(), null, indentArg()), "formatted"));
+$("minify").addEventListener("click", () => act(() => JSON.stringify(getValue()), "minified"));
+$("toYaml").addEventListener("click", () => act(() => toYaml(getValue()), "converted to YAML"));
+$("toCsv").addEventListener("click", () => act(() => toCsv(getValue()), "converted to CSV"));
+$("copy").addEventListener("click", () => copyText($("output").value, "Output copied"));
+
+$("useOutput").addEventListener("click", () => {
+  if (!$("output").value) { toast("Output is empty"); return; }
+  $("input").value = $("output").value;
+  $("output").value = "";
+  validate();
+});
+
+$("clear").addEventListener("click", () => {
+  $("input").value = "";
+  $("output").value = "";
+  setStatus($("statusIn"), "");
+  setStatus($("statusOut"), "");
+});
+
+$("sample").addEventListener("click", () => {
+  $("input").value = JSON.stringify([
+    { id: 1, name: "Alice", role: "admin", tags: ["staff", "ops"] },
+    { id: 2, name: "Bob", role: "viewer", tags: [] },
+    { id: 3, name: "Citra", role: "editor", address: { city: "Jakarta" } },
+  ]);
+  act(() => JSON.stringify(getValue(), null, indentArg()), "formatted");
+});
+
+function validate() {
+  const text = $("input").value.trim();
+  if (!text) { setStatus($("statusIn"), ""); return; }
+  try {
+    const { note } = parseJsonLoose(text);
+    setStatus($("statusIn"), "valid JSON" + note, "ok");
+  } catch (e) {
+    setStatus($("statusIn"), "invalid: " + e.message, "err");
+  }
+}
+
+let t;
+$("input").addEventListener("input", () => {
+  clearTimeout(t);
+  t = setTimeout(validate, 300);
+});
+
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    act(() => JSON.stringify(getValue(), null, indentArg()), "formatted");
+  }
+});
+</script>
+</body>
+</html>

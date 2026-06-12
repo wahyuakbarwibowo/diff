@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Tool — Convert Text Case</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  textarea { height: 100px; }
+  td.v button.mini { float: right; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Case<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="sample">Sample</button>
+    <button id="clear">Clear</button>
+  </div>
+</header>
+
+<div class="pane" style="margin-bottom:16px">
+  <div class="pane-header"><span>Input</span><span class="status" id="status"></span></div>
+  <textarea id="input" placeholder="Type anything: helloWorld, hello_world, Hello World…" spellcheck="false"></textarea>
+</div>
+
+<div class="card"><table class="kv" id="out"></table></div>
+
+<p class="hint">Word boundaries are detected from spaces, -, _, . and camelCase humps · click 📋 to copy a row</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+// Split into lowercase words: handles camelCase, PascalCase, ACRONYMSLikeHTTP, snake/kebab/dot/space.
+function words(text) {
+  return text
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .split(/[\s\-_./]+/)
+    .filter(Boolean)
+    .map(w => w.toLowerCase());
+}
+
+const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+
+const CASES = [
+  ["camelCase",      (w) => w.map((x, i) => i ? cap(x) : x).join("")],
+  ["PascalCase",     (w) => w.map(cap).join("")],
+  ["snake_case",     (w) => w.join("_")],
+  ["kebab-case",     (w) => w.join("-")],
+  ["CONSTANT_CASE",  (w) => w.join("_").toUpperCase()],
+  ["dot.case",       (w) => w.join(".")],
+  ["path/case",      (w) => w.join("/")],
+  ["Title Case",     (w) => w.map(cap).join(" ")],
+  ["Sentence case",  (w) => w.length ? cap(w.join(" ")) : ""],
+  ["lower case",     (w) => w.join(" ")],
+  ["UPPER CASE",     (w) => w.join(" ").toUpperCase()],
+];
+
+function render() {
+  const text = $("input").value.trim();
+  const w = words(text);
+  setStatus($("status"), text ? w.length + " word" + (w.length === 1 ? "" : "s") : "", "ok");
+  $("out").innerHTML = CASES.map(([name, fn]) => {
+    const val = fn(w);
+    return `<tr><td class="k">${esc(name)}</td><td class="v">${esc(val)}` +
+           `<button class="mini" data-copy="${esc(val)}" title="Copy">📋</button></td></tr>`;
+  }).join("");
+}
+
+$("input").addEventListener("input", render);
+$("clear").addEventListener("click", () => { $("input").value = ""; render(); });
+$("sample").addEventListener("click", () => { $("input").value = "getUserProfileByID"; render(); });
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-copy]");
+  if (btn) copyText(btn.dataset.copy, "Copied");
+});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JWT Tool — Decode &amp; Verify JSON Web Tokens</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  textarea#token { height: 120px; }
+  pre.json {
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .claim-note { color: var(--muted); font-family: -apple-system, sans-serif; }
+  .ok-text { color: var(--ok); }
+  .bad-text { color: var(--bad); }
+  .warn-text { color: var(--warn); }
+  #verifyRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  #verifyRow input.text { flex: 1; min-width: 200px; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ JWT<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="sample">Sample</button>
+    <button id="clear">Clear</button>
+  </div>
+</header>
+
+<div class="pane" style="margin-bottom:16px">
+  <div class="pane-header">
+    <span>Token</span>
+    <span class="status" id="statusTok"></span>
+  </div>
+  <textarea id="token" placeholder="Paste a JWT here (header.payload.signature)…" spellcheck="false"></textarea>
+</div>
+
+<div id="verifyRow">
+  <input class="text" id="secret" type="text" placeholder="HMAC secret (optional — verifies HS256/384/512 signature)" spellcheck="false">
+  <button id="verify" class="primary">Verify signature</button>
+  <span class="status" id="statusVerify"></span>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-header"><span>Header</span><button class="mini" id="copyHeader">📋</button></div>
+    <pre class="json" id="header"></pre>
+  </div>
+  <div class="pane">
+    <div class="pane-header"><span>Payload</span><button class="mini" id="copyPayload">📋</button></div>
+    <pre class="json" id="payload"></pre>
+  </div>
+</div>
+
+<div class="card" id="claimsCard" style="display:none"><table class="kv" id="claims"></table></div>
+
+<p class="hint">Decoding happens locally in your browser — the token never leaves this page · time claims (iat / exp / nbf) are translated below the payload</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+let parts = null; // { headerObj, payloadObj, h, p, s }
+
+function b64urlToBytes(str) {
+  str = str.replace(/-/g, "+").replace(/_/g, "/");
+  str += "=".repeat((4 - str.length % 4) % 4);
+  return Uint8Array.from(atob(str), c => c.charCodeAt(0));
+}
+
+function b64urlToJson(str) {
+  return JSON.parse(new TextDecoder().decode(b64urlToBytes(str)));
+}
+
+function fmtEpoch(sec) {
+  const d = new Date(sec * 1000);
+  const diff = sec * 1000 - Date.now();
+  const abs = Math.abs(diff);
+  const units = [[86400000, "day"], [3600000, "hour"], [60000, "minute"], [1000, "second"]];
+  let rel = "now";
+  for (const [ms, name] of units) {
+    if (abs >= ms) {
+      const n = Math.round(abs / ms);
+      rel = `${n} ${name}${n > 1 ? "s" : ""} ${diff < 0 ? "ago" : "from now"}`;
+      break;
+    }
+  }
+  return { iso: d.toISOString(), local: d.toLocaleString(), rel, future: diff > 0 };
+}
+
+function decode() {
+  const raw = $("token").value.trim();
+  setStatus($("statusTok"), "");
+  setStatus($("statusVerify"), "");
+  $("header").textContent = "";
+  $("payload").textContent = "";
+  $("claimsCard").style.display = "none";
+  parts = null;
+  if (!raw) return;
+
+  const seg = raw.split(".");
+  if (seg.length !== 3) {
+    setStatus($("statusTok"), `expected 3 dot-separated parts, got ${seg.length}`, "err");
+    return;
+  }
+  try {
+    const headerObj = b64urlToJson(seg[0]);
+    const payloadObj = b64urlToJson(seg[1]);
+    parts = { headerObj, payloadObj, h: seg[0], p: seg[1], s: seg[2] };
+    $("header").textContent = JSON.stringify(headerObj, null, 2);
+    $("payload").textContent = JSON.stringify(payloadObj, null, 2);
+    setStatus($("statusTok"), `valid structure · alg ${headerObj.alg || "?"}`, "ok");
+    renderClaims(payloadObj);
+  } catch (e) {
+    setStatus($("statusTok"), "cannot decode: " + e.message, "err");
+  }
+}
+
+function renderClaims(payload) {
+  const rows = [];
+  const timeClaim = (name, label) => {
+    if (typeof payload[name] !== "number") return;
+    const f = fmtEpoch(payload[name]);
+    let cls = "claim-note";
+    if (name === "exp") cls = f.future ? "ok-text" : "bad-text";
+    rows.push(`<tr><td class="k">${name}</td><td class="v">${esc(f.local)} <span class="${cls}">(${esc(label)} ${esc(f.rel)})</span></td></tr>`);
+  };
+  timeClaim("iat", "issued");
+  timeClaim("nbf", "valid from");
+  timeClaim("exp", "expires");
+  if (typeof payload.exp === "number") {
+    const expired = payload.exp * 1000 < Date.now();
+    rows.push(`<tr><td class="k">status</td><td class="v ${expired ? "bad-text" : "ok-text"}">${expired ? "✗ EXPIRED" : "✓ not expired"}</td></tr>`);
+  }
+  for (const name of ["iss", "sub", "aud", "jti"]) {
+    if (payload[name] !== undefined) {
+      rows.push(`<tr><td class="k">${name}</td><td class="v">${esc(JSON.stringify(payload[name]))}</td></tr>`);
+    }
+  }
+  if (rows.length) {
+    $("claims").innerHTML = `<tr><td class="section" colspan="2">standard claims</td></tr>` + rows.join("");
+    $("claimsCard").style.display = "block";
+  }
+}
+
+async function verify() {
+  if (!parts) { setStatus($("statusVerify"), "decode a token first", "err"); return; }
+  const alg = parts.headerObj.alg || "";
+  const m = alg.match(/^HS(256|384|512)$/);
+  if (!m) {
+    setStatus($("statusVerify"), `only HS256/384/512 supported here (token uses ${alg || "none"})`, "warn");
+    return;
+  }
+  const secret = $("secret").value;
+  if (!secret) { setStatus($("statusVerify"), "enter a secret", "err"); return; }
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-" + m[1] }, false, ["verify"]
+    );
+    const ok = await crypto.subtle.verify(
+      "HMAC", key,
+      b64urlToBytes(parts.s),
+      new TextEncoder().encode(parts.h + "." + parts.p)
+    );
+    setStatus($("statusVerify"), ok ? "✓ signature valid" : "✗ signature INVALID", ok ? "ok" : "err");
+  } catch (e) {
+    setStatus($("statusVerify"), "verify failed: " + e.message, "err");
+  }
+}
+
+$("token").addEventListener("input", decode);
+$("verify").addEventListener("click", verify);
+$("secret").addEventListener("keydown", (e) => { if (e.key === "Enter") verify(); });
+$("copyHeader").addEventListener("click", () => copyText($("header").textContent, "Header copied"));
+$("copyPayload").addEventListener("click", () => copyText($("payload").textContent, "Payload copied"));
+
+$("clear").addEventListener("click", () => {
+  $("token").value = "";
+  $("secret").value = "";
+  decode();
+});
+
+$("sample").addEventListener("click", () => {
+  // Demo token signed with secret "secret" (HS256).
+  $("token").value =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+    "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMiwiZXhwIjoyNTE2MjM5MDIyfQ." +
+    "yVpdhM--UgcwB9I6ydTdXsyDvNXLhNZ1xYojQfBnhks";
+  $("secret").value = "secret";
+  decode();
+});
+</script>
+</body>
+</html>

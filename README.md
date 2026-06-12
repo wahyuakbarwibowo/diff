@@ -1,13 +1,36 @@
-# ⚡ DiffTool
+# ⚡ DevTools
 
-Single-file web app to compare text, JSON, YAML, XML, or CSV. No build step, no dependencies — open `index.html` in a browser and it works.
+A collection of offline developer tools. No build step, no dependencies, nothing leaves your browser — open any page and it works. A sidebar links all tools.
+
+| Page | Tool |
+|---|---|
+| `index.html` | **Diff** — compare text / JSON / YAML / XML / CSV (details below) |
+| `url.html` | **URL** — encode/decode, full-URL breakdown with query params |
+| `base64.html` | **Base64** — UTF-8 safe text encode/decode, file → data URI, image preview |
+| `jwt.html` | **JWT** — decode header/payload, time claims, expiry status, HS256/384/512 verify |
+| `timestamp.html` | **Timestamp** — unix epoch (s/ms/µs auto) ↔ date, relative time, live clock |
+| `json.html` | **JSON** — format, minify, sort keys, validate, convert to YAML/CSV |
+| `hash.html` | **Hash** — MD5 / SHA-1 / SHA-256 / SHA-384 / SHA-512 for text and files |
+| `uuid.html` | **UUID/ULID** — v4, v7 (time-ordered), ULID, bulk generation |
+| `regex.html` | **Regex** — live match highlighting, numbered + named groups, replace preview |
+| `cron.html` | **Cron** — field breakdown in English, next 5 run times (POSIX dom/dow rule) |
+| `color.html` | **Color** — hex/rgb/hsl conversion, picker, WCAG contrast (AA/AAA) |
+| `fake.html` | **Fake data** — lorem ipsum, names, emails, phone numbers, JSON users |
+| `case.html` | **Text case** — camel/Pascal/snake/kebab/CONSTANT/dot/path/Title and more |
+| `qr.html` | **QR code** — pure-JS encoder (byte mode, v1–10, ECC M, mask penalty), PNG download |
+
+Shared sidebar/theme/toast live in `assets/common.css` + `assets/common.js`; `index.html` stays fully self-contained because its HTML-export feature embeds its own styles. To add a tool: create the page, add it to `TOOLS` in `assets/common.js` and to the static sidebar in `index.html`.
 
 ## Usage
 
 ```bash
 open index.html        # macOS
-# or just double-click the file
+# or just double-click any .html file
 ```
+
+---
+
+# DiffTool (`index.html`)
 
 1. Paste the original content on the left, the changed content on the right.
 2. Click **Compare** (or press <kbd>Ctrl/Cmd</kbd> + <kbd>Enter</kbd>).

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regex Tool — Test JavaScript Regular Expressions</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  #patternRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  #pattern { flex: 1; min-width: 220px; }
+  #flags { width: 90px; }
+  #replacement { flex: 1; min-width: 220px; }
+  #highlight {
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 60px;
+  }
+  #highlight mark {
+    background: rgba(46, 160, 67, 0.35);
+    color: inherit;
+    border-radius: 2px;
+    outline: 1px solid var(--ok);
+  }
+  #highlight mark:nth-of-type(even) { background: rgba(88, 166, 255, 0.3); outline-color: var(--accent); }
+  textarea#text { height: 140px; }
+  td.gname { color: var(--warn); white-space: nowrap; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Regex<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="sample">Sample</button>
+    <button id="clear">Clear</button>
+  </div>
+</header>
+
+<div id="patternRow">
+  <span style="font-family:var(--mono)">/</span>
+  <input class="text" id="pattern" type="text" placeholder="pattern, e.g. (?&lt;user&gt;\w+)@(\w+\.\w+)" spellcheck="false">
+  <span style="font-family:var(--mono)">/</span>
+  <input class="text" id="flags" type="text" value="g" placeholder="flags" spellcheck="false">
+  <span class="status" id="status"></span>
+</div>
+
+<div class="pane" style="margin-bottom:16px">
+  <div class="pane-header"><span>Test string</span></div>
+  <textarea id="text" placeholder="Text to test against…" spellcheck="false"></textarea>
+</div>
+
+<div class="pane" style="margin-bottom:16px">
+  <div class="pane-header"><span>Matches highlighted</span><span class="status" id="matchCount"></span></div>
+  <div id="highlight"></div>
+</div>
+
+<div class="card" id="groupsCard" style="display:none"><table class="kv" id="groups"></table></div>
+
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+  <input class="text" id="replacement" type="text" placeholder="replacement (optional), e.g. $&lt;user&gt; or $1 — result shows below" spellcheck="false">
+</div>
+<div class="pane" id="replacePane" style="display:none">
+  <div class="pane-header"><span>Replace result</span><button class="mini" id="copyReplace">📋</button></div>
+  <div id="replaceOut" style="padding:12px;font-family:var(--mono);font-size:13px;white-space:pre-wrap;word-break:break-all"></div>
+</div>
+
+<p class="hint">JavaScript RegExp syntax · everything updates live · capture groups (numbered and named) listed per match</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+function update() {
+  const patSrc = $("pattern").value;
+  const flags = $("flags").value;
+  const text = $("text").value;
+  setStatus($("status"), "");
+  setStatus($("matchCount"), "");
+  $("groupsCard").style.display = "none";
+  $("replacePane").style.display = "none";
+
+  if (!patSrc) { $("highlight").innerHTML = esc(text); return; }
+
+  let re;
+  try {
+    re = new RegExp(patSrc, flags);
+  } catch (e) {
+    setStatus($("status"), e.message, "err");
+    $("highlight").innerHTML = esc(text);
+    return;
+  }
+  setStatus($("status"), "valid", "ok");
+
+  // Always iterate with a global clone so highlighting covers all matches.
+  const g = new RegExp(patSrc, flags.includes("g") ? flags : flags + "g");
+  const matches = [];
+  let m;
+  while ((m = g.exec(text)) !== null) {
+    matches.push(m);
+    if (m.index === g.lastIndex) g.lastIndex++; // avoid zero-width infinite loop
+    if (matches.length >= 5000) break;
+  }
+
+  // Highlighted text
+  let html = "", pos = 0;
+  for (const match of matches) {
+    if (match[0] === "") continue;
+    html += esc(text.slice(pos, match.index));
+    html += "<mark>" + esc(match[0]) + "</mark>";
+    pos = match.index + match[0].length;
+  }
+  html += esc(text.slice(pos));
+  $("highlight").innerHTML = html || "<span style='color:var(--muted)'>(empty)</span>";
+  setStatus($("matchCount"), matches.length + " match" + (matches.length === 1 ? "" : "es"), matches.length ? "ok" : "");
+
+  // Groups table
+  if (matches.length) {
+    const rows = [];
+    matches.slice(0, 100).forEach((match, idx) => {
+      rows.push(`<tr><td class="section" colspan="2">match ${idx + 1} @ index ${match.index}: ${esc(JSON.stringify(match[0]))}</td></tr>`);
+      for (let gi = 1; gi < match.length; gi++) {
+        rows.push(`<tr><td class="k">$${gi}</td><td class="v">${match[gi] === undefined ? "<i>undefined</i>" : esc(JSON.stringify(match[gi]))}</td></tr>`);
+      }
+      for (const [name, val] of Object.entries(match.groups || {})) {
+        rows.push(`<tr><td class="k gname">&lt;${esc(name)}&gt;</td><td class="v">${val === undefined ? "<i>undefined</i>" : esc(JSON.stringify(val))}</td></tr>`);
+      }
+    });
+    $("groups").innerHTML = rows.join("");
+    $("groupsCard").style.display = "block";
+  }
+
+  // Replace preview
+  const repl = $("replacement").value;
+  if (repl !== "") {
+    try {
+      $("replaceOut").textContent = text.replace(g, repl);
+      $("replacePane").style.display = "block";
+    } catch (e) { /* bad replacement pattern */ }
+  }
+}
+
+for (const id of ["pattern", "flags", "text", "replacement"]) {
+  $(id).addEventListener("input", update);
+}
+
+$("copyReplace").addEventListener("click", () => copyText($("replaceOut").textContent, "Result copied"));
+
+$("clear").addEventListener("click", () => {
+  $("pattern").value = "";
+  $("flags").value = "g";
+  $("text").value = "";
+  $("replacement").value = "";
+  update();
+});
+
+$("sample").addEventListener("click", () => {
+  $("pattern").value = "(?<user>[\\w.]+)@(?<domain>[\\w.]+)";
+  $("flags").value = "g";
+  $("text").value = "Contact alice@example.com or budi.santoso@mail.co.id for access.\nInvalid: not-an-email@, @nope.com";
+  $("replacement").value = "<$<user> AT $<domain>>";
+  update();
+});
+
+update();
+</script>
+</body>
+</html>

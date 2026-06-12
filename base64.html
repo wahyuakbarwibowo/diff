@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Base64 Tool — Encode / Decode Text &amp; Files</title>
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  #preview {
+    display: none;
+    max-width: 100%;
+    max-height: 300px;
+    margin: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Base64<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="encode" class="primary">Encode →</button>
+    <button id="decode" class="primary">← Decode</button>
+  </div>
+</header>
+
+<div class="options">
+  <label class="checkbox"><input type="checkbox" id="urlSafe"> URL-safe (-_ instead of +/, no padding)</label>
+  <label class="checkbox"><input type="checkbox" id="eachLine"> Each line separately</label>
+  <button id="file" title="Encode a file as a data URI">📂 File → data URI</button>
+  <button id="swap">⇄ Swap</button>
+  <button id="clear">Clear</button>
+  <button id="copy">📋 Copy output</button>
+</div>
+<input type="file" id="filePick" hidden>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-header">
+      <span>Plain text</span>
+      <span class="status" id="statusIn"></span>
+    </div>
+    <textarea id="input" placeholder="Paste text here, or drop a file anywhere on the page…" spellcheck="false"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-header">
+      <span>Base64</span>
+      <span class="status" id="statusOut"></span>
+    </div>
+    <textarea id="output" placeholder="Base64 appears here…" spellcheck="false"></textarea>
+    <img id="preview" alt="decoded image preview">
+  </div>
+</div>
+
+<p class="hint">UTF-8 safe (emoji &amp; non-Latin text work) · drop a file anywhere to get its data URI · paste a data:image URI into the Base64 side and decode to preview it</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+function b64FromBytes(bytes) {
+  let s = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    s += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(s);
+}
+
+function bytesFromB64(str) {
+  const s = atob(str);
+  return Uint8Array.from(s, c => c.charCodeAt(0));
+}
+
+function toUrlSafe(s) { return s.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function fromUrlSafe(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  return s + "=".repeat((4 - s.length % 4) % 4);
+}
+
+function encodeOne(text) {
+  const b64 = b64FromBytes(new TextEncoder().encode(text));
+  return $("urlSafe").checked ? toUrlSafe(b64) : b64;
+}
+
+function decodeOne(text) {
+  text = text.trim();
+  const m = text.match(/^data:[^;,]*(;base64)?,(.*)$/s);
+  if (m) text = m[1] ? m[2] : decodeURIComponent(m[2]);
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytesFromB64(fromUrlSafe(text)));
+}
+
+function showPreview(b64Side) {
+  const img = $("preview");
+  const t = b64Side.trim();
+  if (/^data:image\//.test(t)) {
+    img.src = t;
+    img.style.display = "block";
+  } else {
+    img.style.display = "none";
+    img.removeAttribute("src");
+  }
+}
+
+function run(dir) {
+  setStatus($("statusIn"), "");
+  setStatus($("statusOut"), "");
+  try {
+    if (dir === "encode") {
+      const text = $("input").value;
+      $("output").value = $("eachLine").checked
+        ? text.split("\n").map(encodeOne).join("\n")
+        : encodeOne(text);
+      setStatus($("statusOut"), "encoded", "ok");
+    } else {
+      const text = $("output").value;
+      $("input").value = $("eachLine").checked
+        ? text.split("\n").map(decodeOne).join("\n")
+        : decodeOne(text);
+      setStatus($("statusIn"), "decoded", "ok");
+    }
+  } catch (e) {
+    setStatus(dir === "encode" ? $("statusOut") : $("statusIn"), "invalid base64: " + e.message, "err");
+  }
+  showPreview($("output").value);
+}
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    $("output").value = reader.result;
+    $("input").value = `${file.name} — ${file.type || "unknown type"} — ${file.size.toLocaleString()} bytes`;
+    setStatus($("statusOut"), "data URI from file", "ok");
+    showPreview(reader.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+$("encode").addEventListener("click", () => run("encode"));
+$("decode").addEventListener("click", () => run("decode"));
+$("copy").addEventListener("click", () => copyText($("output").value, "Base64 copied"));
+$("file").addEventListener("click", () => $("filePick").click());
+$("filePick").addEventListener("change", (e) => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+  e.target.value = "";
+});
+
+$("swap").addEventListener("click", () => {
+  const a = $("input").value;
+  $("input").value = $("output").value;
+  $("output").value = a;
+  showPreview($("output").value);
+});
+
+$("clear").addEventListener("click", () => {
+  $("input").value = "";
+  $("output").value = "";
+  setStatus($("statusIn"), "");
+  setStatus($("statusOut"), "");
+  showPreview("");
+});
+
+document.addEventListener("dragover", (e) => e.preventDefault());
+document.addEventListener("drop", (e) => {
+  e.preventDefault();
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run(e.shiftKey ? "decode" : "encode");
+});
+
+$("output").addEventListener("input", () => showPreview($("output").value));
+</script>
+</body>
+</html>
