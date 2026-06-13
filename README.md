@@ -30,6 +30,29 @@ open index.html        # macOS
 # or just double-click any .html file
 ```
 
+Optional local package-style workflow:
+
+```bash
+npm start
+# or
+node ./bin/devtools.js serve --open
+```
+
+After install/link, the CLI command is:
+
+```bash
+dtool diff before.txt after.txt
+dtool json format '{"ok":true}'
+dtool jwt decode '<token>'
+dtool timestamp now
+dtool hash sha256 'hello'
+dtool case snake 'Hello World'
+dtool url inspect 'https://example.com?a=1'
+dtool uuid v7 3
+```
+
+This keeps the no-build / no-dependency approach, but makes the toolset easier to run as a local package or CLI.
+
 ---
 
 # DiffTool (`index.html`)
