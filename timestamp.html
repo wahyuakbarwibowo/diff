@@ -68,8 +68,9 @@ function parseInput(raw) {
   if (/^-?\d+$/.test(raw)) {
     const n = Number(raw);
     const len = raw.replace("-", "").length;
+    // Width buckets match the hint: ~10 digits → s, ~13 → ms, ~16 → µs.
     if (len >= 16) return { date: new Date(n / 1000), note: "epoch microseconds" };
-    if (len >= 12) return { date: new Date(n), note: "epoch milliseconds" };
+    if (len >= 13) return { date: new Date(n), note: "epoch milliseconds" };
     return { date: new Date(n * 1000), note: "epoch seconds" };
   }
   const t = Date.parse(raw);

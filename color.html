@@ -72,7 +72,7 @@
 
 const ctx = document.createElement("canvas").getContext("2d");
 
-// Normalize any CSS color via canvas; returns [r,g,b] or null.
+// Normalize any CSS color via canvas; returns [r,g,b,a] or null (a defaults to 1).
 function parseColor(str) {
   ctx.fillStyle = "#000";
   ctx.fillStyle = str;
@@ -81,9 +81,9 @@ function parseColor(str) {
   ctx.fillStyle = str;
   if (ctx.fillStyle !== black) return null; // invalid input kept previous fillStyle
   const m = black.match(/^#([0-9a-f]{6})$/i);
-  if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16)];
-  const rgb = black.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
-  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16), 1];
+  const rgb = black.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3]), rgb[4] === undefined ? 1 : Number(rgb[4])];
   return null;
 }
 
@@ -132,8 +132,9 @@ function render(fromPicker) {
     setStatus($("status"), "not a valid CSS color", "err");
     return;
   }
-  setStatus($("status"), "valid", "ok");
-  const [r, g, b] = rgb.map(Math.round);
+  const alpha = rgb[3];
+  setStatus($("status"), alpha < 1 ? `valid · alpha ${alpha} ignored for contrast` : "valid", alpha < 1 ? "warn" : "ok");
+  const [r, g, b] = rgb.slice(0, 3).map(Math.round);
   const hex = "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join("");
   const [h, s, l] = rgbToHsl(r, g, b);
   const hsl = `hsl(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
@@ -145,6 +146,7 @@ function render(fromPicker) {
   $("out").innerHTML = [
     row("hex", hex),
     row("rgb", `rgb(${r}, ${g}, ${b})`),
+    ...(alpha < 1 ? [row("rgba", `rgba(${r}, ${g}, ${b}, ${alpha})`)] : []),
     row("hsl", hsl),
     row("luminance", luminance(r, g, b).toFixed(4)),
   ].join("");

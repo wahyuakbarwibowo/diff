@@ -101,9 +101,9 @@ function email(name) {
 }
 
 function phone() {
-  let s = "+62 8" + (1 + rand(9));
-  for (let i = 0; i < 9; i++) s += rand(10);
-  return s.slice(0, 7) + "-" + s.slice(7, 11) + "-" + s.slice(11);
+  let d = "8" + (1 + rand(9)); // 11-digit national number, starts 8X
+  for (let i = 0; i < 9; i++) d += rand(10);
+  return `+62 ${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
 }
 
 function user(id) {

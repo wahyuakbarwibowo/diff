@@ -153,7 +153,9 @@ function update() {
   const repl = $("replacement").value;
   if (repl !== "") {
     try {
-      $("replaceOut").textContent = text.replace(g, repl);
+      // Use the user's actual regex (re), not the forced-global clone, so replace
+      // honours the real flags: no `g` → only the first match is replaced.
+      $("replaceOut").textContent = text.replace(re, repl);
       $("replacePane").style.display = "block";
     } catch (e) { /* bad replacement pattern */ }
   }

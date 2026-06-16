@@ -156,8 +156,14 @@ function csvCell(v) {
 function toCsv(value) {
   if (!Array.isArray(value)) throw new Error("CSV needs a JSON array");
   if (!value.length) return "";
+  // All-primitive (or null) array → one value per line.
   if (value.every(r => r === null || typeof r !== "object")) {
     return value.map(csvCell).join("\n");
+  }
+  // Object rows → columns from the union of keys. Reject mixed arrays, where a
+  // primitive's "keys" would otherwise be its string indices (garbage columns).
+  if (value.some(r => r === null || typeof r !== "object" || Array.isArray(r))) {
+    throw new Error("CSV needs an array of plain objects (rows are mixed types)");
   }
   const cols = [];
   for (const rowObj of value) {

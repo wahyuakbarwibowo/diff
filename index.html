@@ -466,7 +466,12 @@ function yamlScalar(s) {
   if (s === "" || s === "null" || s === "~") return null;
   if (s === "true") return true;
   if (s === "false") return false;
-  if (/^-?\d+$/.test(s)) return parseInt(s, 10);
+  if (/^-?\d+$/.test(s)) {
+    // Keep leading-zero ("007") and out-of-safe-range ints as strings —
+    // parseInt would corrupt them (drop the zero / lose precision).
+    if (/^-?0\d/.test(s) || !Number.isSafeInteger(parseInt(s, 10))) return s;
+    return parseInt(s, 10);
+  }
   if (/^-?\d*\.\d+(e-?\d+)?$/i.test(s)) return parseFloat(s);
   if ((s[0] === '"' && s.endsWith('"')) || (s[0] === "'" && s.endsWith("'"))) return s.slice(1, -1);
   if (s === "[]") return [];
@@ -556,6 +561,10 @@ function formatXml(text) {
       } else if (child.nodeType === 3) {
         const t = child.textContent.trim();
         if (t) out.push(pad + t);
+      } else if (child.nodeType === 4) {
+        out.push(`${pad}<![CDATA[${child.textContent}]]>`);
+      } else if (child.nodeType === 7) {
+        out.push(`${pad}<?${child.target} ${child.data}?>`);
       } else if (child.nodeType === 8) {
         out.push(`${pad}<!--${child.textContent}-->`);
       }
@@ -589,9 +598,11 @@ function parseCsv(text) {
 }
 
 function formatCsv(rows) {
+  // Quote when needed; leading/trailing spaces are quoted too so they survive
+  // normalization (trimming here would silently drop meaningful whitespace).
   return rows.map(r => r.map(c => {
-    c = String(c).trim();
-    return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c;
+    c = String(c);
+    return /[",\n]/.test(c) || c !== c.trim() ? '"' + c.replace(/"/g, '""') + '"' : c;
   }).join(",")).join("\n");
 }
 
@@ -611,7 +622,9 @@ function setStatus(el, msg, cls) {
 // Returns { lines, value } — value is the parsed object for JSON/YAML (used by structural view).
 function preprocess(text, mode, statusEl) {
   setStatus(statusEl, "");
-  const result = { lines: text.split("\n"), value: null };
+  // `parsed` flags a usable structured value (JSON/YAML), distinct from a real
+  // null value — so the structural view doesn't mistake `null` input for failure.
+  const result = { lines: text.split("\n"), value: null, parsed: false };
   const trimmed = text.trim();
   if (trimmed === "") return result;
 
@@ -621,11 +634,13 @@ function preprocess(text, mode, statusEl) {
       const { value, note } = parseJsonLoose(trimmed);
       result.value = $("sortKeys").checked ? sortKeysDeep(value) : value;
       result.lines = JSON.stringify(result.value, null, 2).split("\n");
+      result.parsed = true;
       setStatus(statusEl, "valid JSON" + note, "ok");
     } else if (fmt === "yaml") {
       const value = parseYaml(text);
       result.value = $("sortKeys").checked ? sortKeysDeep(value) : value;
       result.lines = JSON.stringify(result.value, null, 2).split("\n");
+      result.parsed = true;
       setStatus(statusEl, "YAML parsed (shown as JSON)", "ok");
     } else if (fmt === "xml") {
       result.lines = formatXml(trimmed).split("\n");
@@ -636,7 +651,7 @@ function preprocess(text, mode, statusEl) {
     }
   } catch (e) {
     if (mode !== "auto") setStatus(statusEl, `invalid ${fmt.toUpperCase()}: ${e.message}`, "err");
-    return { lines: text.split("\n"), value: null };
+    return { lines: text.split("\n"), value: null, parsed: false };
   }
   return result;
 }
@@ -719,7 +734,9 @@ function normalizeOps(ops) {
 // ---------- Word-level inline diff for paired changed lines ----------
 
 function esc(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function tokenize(s) {
@@ -903,7 +920,7 @@ function shortVal(v) {
   return s === undefined ? "undefined" : s.length > 100 ? s.slice(0, 97) + "…" : s;
 }
 
-let lastValues = { a: null, b: null };
+let lastValues = { a: null, b: null, aOk: false, bOk: false };
 
 function renderStructural() {
   const grid = $("diffGrid");
@@ -912,7 +929,7 @@ function renderStructural() {
   const table = $("tableLeft");
   table.className = "structural";
 
-  if (lastValues.a === null || lastValues.b === null) {
+  if (!lastValues.aOk || !lastValues.bOk) {
     table.innerHTML = `<tr><td class="sval">Structural view needs valid JSON or YAML on both sides. Switch mode to JSON/YAML or fix parse errors.</td></tr>`;
     return;
   }
@@ -1055,7 +1072,7 @@ function compare() {
   const b = preprocess($("inputB").value, mode, $("statusB"));
   lastA = a.lines;
   lastB = b.lines;
-  lastValues = { a: a.value, b: b.value };
+  lastValues = { a: a.value, b: b.value, aOk: a.parsed, bOk: b.parsed };
 
   lastOps = diffCore(lastA.map(compareKey), lastB.map(compareKey));
   lastRows = buildRows(lastOps, lastA, lastB);
@@ -1129,6 +1146,11 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme
 $("share").addEventListener("click", async () => {
   const encoded = await encodeState(collectState());
   history.replaceState(null, "", "#" + encoded);
+  // Browsers/servers cap URLs around 2 MB; warn before a too-long link silently breaks.
+  if (location.href.length > 2_000_000) {
+    toast("Inputs too large for a share link — paste manually instead");
+    return;
+  }
   try {
     await navigator.clipboard.writeText(location.href);
     toast("Link copied to clipboard");
@@ -1176,7 +1198,12 @@ $("diffGrid").addEventListener("click", (e) => {
 });
 
 // File open buttons + drag & drop.
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 function loadFile(file, side) {
+  if (file.size > MAX_FILE_BYTES) {
+    toast(`File too large (${(file.size / 1048576).toFixed(1)} MB, max 10 MB)`);
+    return;
+  }
   const reader = new FileReader();
   reader.onload = () => {
     $("input" + side).value = reader.result;
