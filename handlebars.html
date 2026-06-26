@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Handlebars Preview — Live Template Renderer</title>
+<meta name="description" content="Preview Handlebars.js templates live in the browser. Paste your template and JSON data, see the rendered output instantly — no server needed.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/handlebars.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Handlebars Preview">
+<meta property="og:description" content="Preview Handlebars.js templates live in the browser. Paste your template and JSON data, see the rendered output instantly — no server needed.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Handlebars Preview">
+<meta name="twitter:description" content="Preview Handlebars.js templates live in the browser. Paste your template and JSON data, see the rendered output instantly — no server needed.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .editor-grid {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  textarea#tpl { height: 280px; }
+  textarea#ctx { height: 280px; }
+  textarea#helpers { height: 90px; }
+
+  details.helpers-wrap { margin-bottom: 16px; }
+  details.helpers-wrap > summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 6px 2px;
+    list-style: none;
+    user-select: none;
+  }
+  details.helpers-wrap > summary::-webkit-details-marker { display: none; }
+  details.helpers-wrap > summary::before { content: "▶"; font-size: 10px; }
+  details.helpers-wrap[open] > summary::before { content: "▼"; }
+  details.helpers-wrap > summary:hover { color: var(--text); }
+  details.helpers-wrap .pane { margin-top: 8px; }
+
+  .out-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px 0 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .out-tabs { display: flex; gap: 4px; padding: 6px 8px; }
+  .out-tab {
+    padding: 3px 10px;
+    font-size: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .out-tab:hover { border-color: var(--accent); color: var(--text); }
+  .out-tab.active { background: var(--panel); color: var(--text); border-color: var(--accent); font-weight: 600; }
+
+  #outError {
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--bad);
+    background: rgba(248, 81, 73, 0.08);
+    border-bottom: 1px solid var(--border);
+    display: none;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  iframe#outHtml {
+    width: 100%;
+    min-height: 80px;
+    border: none;
+    display: block;
+  }
+
+  #outRaw {
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 60px;
+    display: none;
+  }
+
+  @media (max-width: 800px) {
+    .editor-grid { grid-template-columns: 1fr; }
+    textarea#tpl, textarea#ctx { height: 200px; }
+    .out-tabs { padding: 6px 4px; }
+  }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/handlebars@4.7.8/dist/handlebars.min.js"></script>
+
+<header>
+  <h1>⚡ Handlebars<span>Preview</span></h1>
+  <div class="controls">
+    <button id="theme">🌓</button>
+    <button id="sample">Sample</button>
+    <button id="clear">Clear</button>
+    <button id="copyOut" class="primary">📋 Copy output</button>
+  </div>
+</header>
+
+<div class="editor-grid">
+  <div class="pane">
+    <div class="pane-header">
+      <span>Template</span>
+      <span class="status" id="tplStatus"></span>
+    </div>
+    <textarea id="tpl" spellcheck="false" placeholder="{{greeting}}, {{name}}!
+
+{{#each items}}
+  - {{this}}
+{{/each}}"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-header">
+      <span>Data (JSON)</span>
+      <span class="status" id="ctxStatus"></span>
+    </div>
+    <textarea id="ctx" spellcheck="false" placeholder='{
+  "greeting": "Hello",
+  "name": "World",
+  "items": ["one", "two", "three"]
+}'></textarea>
+  </div>
+</div>
+
+<details class="helpers-wrap" id="helpersWrap">
+  <summary>Custom helpers (JS)</summary>
+  <div class="pane">
+    <div class="pane-header">
+      <span>Helpers object</span>
+      <span class="status" id="helpersStatus"></span>
+    </div>
+    <textarea id="helpers" spellcheck="false" placeholder="// Return an object mapping helper names to functions
+({
+  upper: (s) => String(s).toUpperCase(),
+  repeat: (str, n) => String(str).repeat(Number(n) || 0)
+})"></textarea>
+  </div>
+</details>
+
+<div class="card" id="outCard">
+  <div class="out-header">
+    <div class="out-tabs">
+      <button class="out-tab active" data-tab="html">Rendered HTML</button>
+      <button class="out-tab" data-tab="raw">Raw text</button>
+    </div>
+    <button class="mini" id="copyOutMini" title="Copy output">📋</button>
+  </div>
+  <div id="outError"></div>
+  <iframe id="outHtml" sandbox="allow-same-origin" title="Rendered output"></iframe>
+  <div id="outRaw"></div>
+</div>
+
+<p class="hint">Handlebars 4.x — live preview · built-in: {{#if}}, {{#each}}, {{#with}}, {{#unless}}, {{lookup}}, {{log}} · custom helpers run as JS in your browser</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+let activeTab = "html";
+let lastOutput = "";
+
+// ---------- Tab switching ----------
+
+document.querySelectorAll(".out-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    activeTab = btn.dataset.tab;
+    document.querySelectorAll(".out-tab").forEach(b => b.classList.toggle("active", b === btn));
+    showTab(activeTab);
+  });
+});
+
+function showTab(tab) {
+  $("outHtml").style.display = tab === "html" ? "block" : "none";
+  $("outRaw").style.display = tab === "raw" ? "block" : "none";
+}
+
+// ---------- Helpers eval ----------
+
+function evalHelpers(src) {
+  src = src.trim();
+  if (!src) return { helpers: {}, error: null };
+  const meaningful = src.split("\n").filter(l => !l.trim().startsWith("//") && l.trim()).join("").trim();
+  if (!meaningful) return { helpers: {}, error: null };
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = new Function('"use strict"; return (' + src + ')')();
+    if (typeof result !== "object" || Array.isArray(result) || result === null)
+      throw new Error("must be an object of helper functions");
+    return { helpers: result, error: null };
+  } catch (e) {
+    return { helpers: {}, error: e.message };
+  }
+}
+
+// ---------- Output rendering ----------
+
+function iframeStyles() {
+  const dark = document.documentElement.dataset.theme !== "light";
+  return dark
+    ? "body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:16px;margin:0;line-height:1.6;word-break:break-word}a{color:#58a6ff}pre,code{background:#161b22;border:1px solid #30363d;border-radius:4px;padding:2px 6px;font-family:'SF Mono','Fira Code',Menlo,Consolas,monospace;font-size:.9em}"
+    : "body{background:#ffffff;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:16px;margin:0;line-height:1.6;word-break:break-word}a{color:#0969da}pre,code{background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;padding:2px 6px;font-family:'SF Mono','Fira Code',Menlo,Consolas,monospace;font-size:.9em}";
+}
+
+function showError(msg) {
+  const el = $("outError");
+  el.textContent = msg;
+  el.style.display = msg ? "block" : "none";
+}
+
+function setIframeSrcdoc(html) {
+  const frame = $("outHtml");
+  frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${iframeStyles()}</style></head><body>${html}</body></html>`;
+  frame.onload = () => {
+    try {
+      const doc = frame.contentDocument;
+      if (doc) frame.style.height = Math.max(60, doc.documentElement.scrollHeight) + "px";
+    } catch (e) { /* sandboxed — ignore */ }
+  };
+}
+
+function renderOutput(html, isEmpty) {
+  lastOutput = isEmpty ? "" : html;
+  const placeholder = `<p style="color:#8b949e;font-size:13px;text-align:center;margin-top:24px">Enter a template and data above to see the preview</p>`;
+  setIframeSrcdoc(isEmpty ? placeholder : html);
+  const raw = $("outRaw");
+  if (isEmpty) {
+    raw.innerHTML = `<span style="color:var(--muted)">Enter a template and data above to see the output</span>`;
+  } else {
+    raw.textContent = html;
+  }
+}
+
+// ---------- Main update ----------
+
+function update() {
+  const tplSrc = $("tpl").value;
+  const ctxSrc = $("ctx").value.trim();
+  const helpersSrc = $("helpers").value;
+
+  showError("");
+  setStatus($("tplStatus"), "");
+  setStatus($("ctxStatus"), "");
+  setStatus($("helpersStatus"), "");
+
+  if (!tplSrc.trim() && !ctxSrc) {
+    renderOutput("", true);
+    return;
+  }
+
+  // Parse context
+  let ctx = {};
+  if (ctxSrc) {
+    try {
+      ctx = JSON.parse(ctxSrc);
+      setStatus($("ctxStatus"), "valid", "ok");
+    } catch (e) {
+      setStatus($("ctxStatus"), "invalid JSON", "err");
+      showError("Data error: " + e.message);
+      renderOutput("", false);
+      return;
+    }
+  }
+
+  // Eval helpers — use a fresh Handlebars environment to avoid leaking helpers
+  const { helpers, error: helperErr } = evalHelpers(helpersSrc);
+  if (helperErr) {
+    setStatus($("helpersStatus"), "error", "err");
+    showError("Helpers error: " + helperErr);
+  } else if (Object.keys(helpers).length > 0) {
+    const n = Object.keys(helpers).length;
+    setStatus($("helpersStatus"), n + " helper" + (n > 1 ? "s" : ""), "ok");
+  }
+
+  const HB = window.Handlebars.create();
+  for (const [name, fn] of Object.entries(helpers)) {
+    if (typeof fn === "function") HB.registerHelper(name, fn);
+  }
+
+  if (!tplSrc.trim()) {
+    renderOutput("", true);
+    return;
+  }
+
+  // Compile
+  let compiled;
+  try {
+    compiled = HB.compile(tplSrc);
+    setStatus($("tplStatus"), "OK", "ok");
+  } catch (e) {
+    setStatus($("tplStatus"), "parse error", "err");
+    showError("Template error: " + e.message);
+    renderOutput("", false);
+    return;
+  }
+
+  // Render
+  try {
+    const result = compiled(ctx);
+    renderOutput(result, false);
+    persist();
+  } catch (e) {
+    setStatus($("tplStatus"), "render error", "err");
+    showError("Render error: " + e.message);
+    renderOutput("", false);
+  }
+}
+
+// ---------- Persistence ----------
+
+function persist() {
+  try {
+    localStorage.setItem("hb-state", JSON.stringify({
+      tpl: $("tpl").value,
+      ctx: $("ctx").value,
+      helpers: $("helpers").value,
+      helpersOpen: $("helpersWrap").open,
+    }));
+  } catch (e) { /* quota */ }
+}
+
+function restoreState() {
+  try {
+    const saved = localStorage.getItem("hb-state");
+    if (!saved) return;
+    const st = JSON.parse(saved);
+    if (st.tpl) $("tpl").value = st.tpl;
+    if (st.ctx) $("ctx").value = st.ctx;
+    if (st.helpers) $("helpers").value = st.helpers;
+    if (st.helpersOpen) $("helpersWrap").open = true;
+  } catch (e) { /* ignore corrupt state */ }
+}
+
+// ---------- Debounce ----------
+
+let debounceTimer;
+function scheduleUpdate() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(update, 220);
+}
+
+for (const id of ["tpl", "ctx", "helpers"]) {
+  $(id).addEventListener("input", scheduleUpdate);
+}
+
+// ---------- Controls ----------
+
+$("sample").addEventListener("click", () => {
+  $("tpl").value = `<h2>{{greeting}}, {{upper name}}!</h2>
+
+<p>You have <strong>{{items.length}} item{{#if plural}}s{{/if}}</strong> in your list:</p>
+<ul>
+{{#each items}}
+  <li>
+    <strong>{{add @index 1}}.</strong> {{this.label}}
+    {{#if this.done}} ✅{{else}} ⬜{{/if}}
+  </li>
+{{/each}}
+</ul>
+
+{{#if note}}
+  <blockquote>📝 {{note}}</blockquote>
+{{/if}}
+
+{{! This is a Handlebars comment — it won't appear in output }}
+<footer style="color:gray;font-size:12px">Rendered at: {{timestamp}}</footer>`;
+
+  $("ctx").value = JSON.stringify({
+    greeting: "Hello",
+    name: "developer",
+    plural: true,
+    items: [
+      { label: "Learn Handlebars", done: true },
+      { label: "Build templates", done: true },
+      { label: "Deploy to production", done: false },
+    ],
+    note: "This preview runs entirely in your browser — no server needed.",
+    timestamp: new Date().toLocaleString(),
+  }, null, 2);
+
+  $("helpers").value = `({
+  upper: (s) => String(s).toUpperCase(),
+  add: (a, b) => Number(a) + Number(b)
+})`;
+
+  $("helpersWrap").open = true;
+  update();
+});
+
+$("clear").addEventListener("click", () => {
+  $("tpl").value = "";
+  $("ctx").value = "";
+  $("helpers").value = "";
+  $("helpersWrap").open = false;
+  showError("");
+  setStatus($("tplStatus"), "");
+  setStatus($("ctxStatus"), "");
+  setStatus($("helpersStatus"), "");
+  renderOutput("", true);
+  try { localStorage.removeItem("hb-state"); } catch (e) {}
+});
+
+$("copyOut").addEventListener("click", () => copyText(lastOutput, "Output copied"));
+$("copyOutMini").addEventListener("click", () => copyText(lastOutput, "Output copied"));
+
+// Re-render iframe styles when theme changes
+new MutationObserver(() => {
+  setIframeSrcdoc(lastOutput || `<p style="color:#8b949e;font-size:13px;text-align:center;margin-top:24px">Enter a template and data above to see the preview</p>`);
+}).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+// ---------- Init ----------
+
+showTab(activeTab);
+restoreState();
+update();
+</script>
+</body>
+</html>

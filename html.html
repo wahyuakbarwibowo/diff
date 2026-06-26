@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML Preview — Live Browser Renderer</title>
+<meta name="description" content="Write and preview HTML, CSS, and JavaScript live in the browser. Sandboxed — runs entirely client-side with no server required.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/html.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — HTML Preview">
+<meta property="og:description" content="Write and preview HTML, CSS, and JavaScript live in the browser. Sandboxed — runs entirely client-side with no server required.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — HTML Preview">
+<meta name="twitter:description" content="Write and preview HTML, CSS, and JavaScript live in the browser. Sandboxed — runs entirely client-side with no server required.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .split-view {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: start;
+  }
+  .editor-col { display: flex; flex-direction: column; gap: 8px; }
+  textarea#htmlCode { height: 380px; }
+  textarea#cssCode { height: 120px; }
+  textarea#jsCode  { height: 120px; }
+
+  iframe#preview {
+    width: 100%;
+    height: 500px;
+    border: none;
+    display: block;
+    background: #fff;
+  }
+  .preview-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    position: sticky;
+    top: 16px;
+  }
+
+  details.editor-section { }
+  details.editor-section > summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 6px 2px;
+    list-style: none;
+    user-select: none;
+  }
+  details.editor-section > summary::-webkit-details-marker { display: none; }
+  details.editor-section > summary::before { content: "▶"; font-size: 10px; }
+  details.editor-section[open] > summary::before { content: "▼"; }
+  details.editor-section > summary:hover { color: var(--text); }
+  details.editor-section .pane { margin-top: 8px; }
+
+  .badge-lang {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-left: 4px;
+  }
+  .badge-warn {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(210, 153, 34, 0.2);
+    color: var(--warn, #d29922);
+    border: 1px solid rgba(210, 153, 34, 0.4);
+    font-family: -apple-system, sans-serif;
+    margin-left: 4px;
+  }
+
+  .preview-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--muted);
+    gap: 8px;
+  }
+  .preview-toolbar .right { display: flex; align-items: center; gap: 6px; }
+
+  .device-btns { display: flex; gap: 4px; }
+  .device-btn {
+    padding: 2px 7px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .device-btn:hover { border-color: var(--accent); color: var(--text); }
+  .device-btn.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+  #jsToggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  #jsToggle input { accent-color: var(--accent); cursor: pointer; }
+
+  @media (max-width: 800px) {
+    .split-view { grid-template-columns: 1fr; }
+    .preview-card { position: static; }
+    iframe#preview { height: 360px; }
+    textarea#htmlCode { height: 240px; }
+    textarea#cssCode, textarea#jsCode { height: 100px; }
+  }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ HTML<span>Preview</span></h1>
+  <div class="controls">
+    <button id="theme">🌓</button>
+    <button id="sample">Sample</button>
+    <button id="clear">Clear</button>
+    <button id="copyFull" class="primary">📋 Copy HTML</button>
+  </div>
+</header>
+
+<div class="split-view">
+  <!-- Editors column -->
+  <div class="editor-col">
+    <div class="pane">
+      <div class="pane-header">
+        <span>HTML <span class="badge-lang">html</span></span>
+        <span class="status" id="htmlStatus"></span>
+      </div>
+      <textarea id="htmlCode" spellcheck="false" placeholder="<h1>Hello, world!</h1>
+<p>Start typing to see a live preview →</p>"></textarea>
+    </div>
+
+    <details class="editor-section" id="cssWrap">
+      <summary>CSS <span class="badge-lang">css</span></summary>
+      <div class="pane">
+        <div class="pane-header"><span>Styles</span></div>
+        <textarea id="cssCode" spellcheck="false" placeholder="body {
+  font-family: sans-serif;
+  padding: 16px;
+}"></textarea>
+      </div>
+    </details>
+
+    <details class="editor-section" id="jsWrap">
+      <summary>JavaScript <span class="badge-warn">sandboxed</span></summary>
+      <div class="pane">
+        <div class="pane-header"><span>Script</span></div>
+        <textarea id="jsCode" spellcheck="false" placeholder="// Runs after the HTML is rendered
+document.querySelectorAll('h1').forEach(el => {
+  el.style.color = '#58a6ff';
+});"></textarea>
+      </div>
+    </details>
+  </div>
+
+  <!-- Preview column -->
+  <div>
+    <div class="preview-card">
+      <div class="preview-toolbar">
+        <span>Preview</span>
+        <div class="right">
+          <div class="device-btns">
+            <button class="device-btn active" data-width="100%" title="Full width">Desktop</button>
+            <button class="device-btn" data-width="768px" title="768px">Tablet</button>
+            <button class="device-btn" data-width="375px" title="375px">Mobile</button>
+          </div>
+          <label id="jsToggle" title="Toggle JavaScript execution">
+            <input type="checkbox" id="enableJs" checked>
+            JS
+          </label>
+          <button class="mini" id="refreshBtn" title="Force refresh">↺</button>
+        </div>
+      </div>
+      <div style="overflow:auto;text-align:center;background:var(--bg)">
+        <iframe id="preview" sandbox="allow-scripts" title="HTML preview"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="hint">Live preview updates as you type · CSS and JS are optional · JavaScript runs in a sandboxed iframe (isolated from this page)</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+// ---------- Build the iframe document ----------
+
+function buildDoc() {
+  const html  = $("htmlCode").value;
+  const css   = $("cssCode").value;
+  const js    = $("jsCode").value;
+  const jsOn  = $("enableJs").checked;
+
+  const styleBlock = css ? `<style>${css}</style>` : "";
+  const scriptBlock = (js && jsOn) ? `<script>\n${js}\n<\/script>` : "";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+${styleBlock}
+</head>
+<body>
+${html}
+${scriptBlock}
+</body>
+</html>`;
+}
+
+// ---------- Render ----------
+
+function applyPreviewWidth(btn) {
+  const w = btn.dataset.width;
+  const frame = $("preview");
+  frame.style.width = w;
+  frame.style.maxWidth = "100%";
+}
+
+function render() {
+  const frame = $("preview");
+  const jsOn = $("enableJs").checked;
+  frame.sandbox = jsOn ? "allow-scripts" : "";
+  frame.srcdoc = buildDoc();
+  setStatus($("htmlStatus"), "");
+}
+
+// ---------- Device buttons ----------
+
+document.querySelectorAll(".device-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".device-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    applyPreviewWidth(btn);
+  });
+});
+
+// ---------- Persistence ----------
+
+function persist() {
+  try {
+    localStorage.setItem("html-preview-state", JSON.stringify({
+      html: $("htmlCode").value,
+      css: $("cssCode").value,
+      js: $("jsCode").value,
+      cssOpen: $("cssWrap").open,
+      jsOpen: $("jsWrap").open,
+      jsEnabled: $("enableJs").checked,
+    }));
+  } catch (e) { /* quota */ }
+}
+
+function restoreState() {
+  try {
+    const saved = localStorage.getItem("html-preview-state");
+    if (!saved) return;
+    const st = JSON.parse(saved);
+    if (st.html) $("htmlCode").value = st.html;
+    if (st.css) { $("cssCode").value = st.css; $("cssWrap").open = true; }
+    if (st.js) { $("jsCode").value = st.js; $("jsWrap").open = true; }
+    if (st.cssOpen) $("cssWrap").open = true;
+    if (st.jsOpen) $("jsWrap").open = true;
+    if (st.jsEnabled === false) $("enableJs").checked = false;
+  } catch (e) { /* ignore corrupt state */ }
+}
+
+// ---------- Debounce ----------
+
+let debounceTimer;
+function scheduleRender() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { render(); persist(); }, 250);
+}
+
+for (const id of ["htmlCode", "cssCode", "jsCode"]) {
+  $(id).addEventListener("input", scheduleRender);
+}
+$("enableJs").addEventListener("change", () => { render(); persist(); });
+
+// ---------- Controls ----------
+
+$("sample").addEventListener("click", () => {
+  $("htmlCode").value = `<div class="card">
+  <h1>Welcome to HTML Preview</h1>
+  <p>Edit the <strong>HTML</strong>, <strong>CSS</strong>, and <strong>JS</strong> panels to see live changes.</p>
+  <ul id="list">
+    <li>HTML — structure</li>
+    <li>CSS — style</li>
+    <li>JavaScript — behaviour</li>
+  </ul>
+  <button onclick="addItem()">Add item</button>
+</div>
+
+<div class="counter">
+  Clicked <span id="count">0</span> time(s)
+  <button onclick="document.getElementById('count').textContent = Number(document.getElementById('count').textContent)+1">+1</button>
+</div>`;
+
+  $("cssCode").value = `*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f0f4f8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px;
+  gap: 16px;
+  min-height: 100vh;
+}
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.1);
+  max-width: 440px;
+  width: 100%;
+}
+h1 { font-size: 22px; margin-bottom: 10px; color: #0969da; }
+p { color: #444; line-height: 1.6; margin-bottom: 14px; }
+ul { padding-left: 20px; color: #333; line-height: 1.9; margin-bottom: 14px; }
+button {
+  background: #0969da;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:hover { background: #0757ba; }
+.counter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: #555;
+}`;
+
+  $("jsCode").value = `let n = 1;
+function addItem() {
+  const li = document.createElement('li');
+  li.textContent = 'New item ' + (++n);
+  document.getElementById('list').appendChild(li);
+}`;
+
+  $("cssWrap").open = true;
+  $("jsWrap").open = true;
+  $("enableJs").checked = true;
+  render();
+  persist();
+});
+
+$("clear").addEventListener("click", () => {
+  $("htmlCode").value = "";
+  $("cssCode").value = "";
+  $("jsCode").value = "";
+  $("cssWrap").open = false;
+  $("jsWrap").open = false;
+  render();
+  try { localStorage.removeItem("html-preview-state"); } catch (e) {}
+});
+
+$("copyFull").addEventListener("click", () => copyText(buildDoc(), "Full HTML copied"));
+
+$("refreshBtn").addEventListener("click", render);
+
+// ---------- Init ----------
+
+restoreState();
+render();
+</script>
+</body>
+</html>
