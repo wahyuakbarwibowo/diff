@@ -13,3 +13,5 @@ diff.html
 # Misc
 *.log
 node_modules/
+
+.claude
