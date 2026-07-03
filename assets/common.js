@@ -27,6 +27,9 @@ const TOOLS = [
   { href: "qr.html", label: "▦ QR code" },
   { href: "html.html", label: "🌐 HTML preview" },
   { href: "handlebars.html", label: "{{ }} Handlebars" },
+  { href: "types.html", label: "🏷️ JSON → Types" },
+  { href: "number.html", label: "🔢 Number base" },
+  { href: "escape.html", label: "\\ Escape" },
 ];
 
 (function injectSidebar() {
@@ -94,3 +97,68 @@ function setStatus(el, msg, cls) {
   el.textContent = msg;
   el.className = "status" + (cls ? " " + cls : "");
 }
+
+// ---------- Command palette (Cmd/Ctrl+K) ----------
+// Reads the sidebar links, so it works with both the injected and static nav.
+function initPalette() {
+  const links = [...document.querySelectorAll(".sidebar nav a")]
+    .map(a => ({ href: a.getAttribute("href"), label: a.textContent.trim() }));
+  if (!links.length) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "cmdk";
+  overlay.innerHTML = `<div class="cmdk-box"><input id="cmdk-input" placeholder="Search tools…" autocomplete="off" spellcheck="false"><ul id="cmdk-list"></ul></div>`;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector("#cmdk-input");
+  const list = overlay.querySelector("#cmdk-list");
+  let matches = [], sel = 0;
+
+  function render() {
+    const q = input.value.trim().toLowerCase();
+    matches = q ? links.filter(l => l.label.toLowerCase().includes(q)) : links;
+    if (sel >= matches.length) sel = 0;
+    list.innerHTML = matches.map((l, i) =>
+      `<li data-i="${i}"${i === sel ? ' class="sel"' : ""}>${esc(l.label)}</li>`).join("");
+  }
+  function open() {
+    overlay.classList.add("show");
+    input.value = ""; sel = 0; render();
+    input.focus();
+  }
+  function close() { overlay.classList.remove("show"); }
+  function go() { if (matches[sel]) location.href = matches[sel].href; }
+
+  input.addEventListener("input", render);
+  list.addEventListener("click", (e) => {
+    const li = e.target.closest("li[data-i]");
+    if (li) { sel = +li.dataset.i; go(); }
+  });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { sel = (sel + 1) % matches.length; render(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { sel = (sel - 1 + matches.length) % matches.length; render(); e.preventDefault(); }
+    else if (e.key === "Enter") { go(); }
+    else if (e.key === "Escape") { close(); }
+  });
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      overlay.classList.contains("show") ? close() : open();
+    }
+  });
+}
+initPalette();
+
+// ---------- PWA: manifest link + service worker (offline install) ----------
+(function initPWA() {
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = "manifest.webmanifest";
+    document.head.appendChild(link);
+  }
+  if ("serviceWorker" in navigator) {
+    addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+})();

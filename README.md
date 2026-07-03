@@ -20,8 +20,15 @@ A collection of offline developer tools. No build step, no dependencies, nothing
 | `fake.html` | **Fake data** — lorem ipsum, names, emails, phone numbers, JSON users |
 | `case.html` | **Text case** — camel/Pascal/snake/kebab/CONSTANT/dot/path/Title and more |
 | `qr.html` | **QR code** — pure-JS encoder (byte mode, v1–10, ECC M, mask penalty), PNG download |
+| `html.html` | **HTML preview** — live render of pasted HTML |
+| `handlebars.html` | **Handlebars** — render Handlebars templates against JSON data |
+| `types.html` | **JSON → Types** — generate TypeScript interfaces or Go structs from sample JSON |
+| `number.html` | **Number base** — dec/hex/bin/oct convert (BigInt), bit length, grouped binary |
+| `escape.html` | **Escape** — escape/unescape for JSON, HTML, SQL, shell, regex |
 
-Shared sidebar/theme/toast live in `assets/common.css` + `assets/common.js`; `index.html` stays fully self-contained because its HTML-export feature embeds its own styles. To add a tool: create the page, add it to `TOOLS` in `assets/common.js` and to the static sidebar in `index.html`.
+Press <kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd> on any page for a command palette to jump between tools. Installable as a PWA (works fully offline via a service worker).
+
+Shared sidebar/theme/toast/command-palette live in `assets/common.css` + `assets/common.js`; `index.html` stays fully self-contained because its HTML-export feature embeds its own styles. To add a tool: create the page, add it to `TOOLS` in `assets/common.js` and to the static sidebar in `index.html`.
 
 ## Usage
 

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Number Tool — Base Converter (Dec / Hex / Bin / Oct)</title>
+<meta name="description" content="Convert numbers between decimal, hexadecimal, binary and octal, with bitwise operations. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/number.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Number Base Converter">
+<meta property="og:description" content="Convert numbers between decimal, hexadecimal, binary and octal, with bitwise operations. Runs offline in your browser.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Number Base Converter">
+<meta name="twitter:description" content="Convert numbers between decimal, hexadecimal, binary and octal, with bitwise operations. Runs offline in your browser.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  #value { width: 100%; font-size: 18px; }
+  td.v { font-size: 15px; word-break: break-all; }
+  td.v button.mini { float: right; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Number<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="sample">Sample</button>
+    <button id="clear">Clear</button>
+  </div>
+</header>
+
+<div class="options">
+  <select id="base" title="Interpret input as">
+    <option value="auto">Auto-detect</option>
+    <option value="10">Decimal</option>
+    <option value="16">Hexadecimal</option>
+    <option value="2">Binary</option>
+    <option value="8">Octal</option>
+  </select>
+</div>
+
+<div class="pane" style="margin:12px 0">
+  <div class="pane-header"><span>Number</span><span class="status" id="status"></span></div>
+  <div style="padding:12px"><input class="text" id="value" placeholder="e.g. 255, 0xFF, 0b1010, 0o17" spellcheck="false" autocomplete="off"></div>
+</div>
+
+<div class="card"><table class="kv" id="out"></table></div>
+
+<p class="hint">Arbitrary precision (BigInt) · prefixes 0x / 0b / 0o auto-detected · negatives allowed · binary is grouped in nibbles</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+// Parse a string in the given base (2/8/10/16) to a BigInt. Throws on bad digits.
+function parseBase(str, base) {
+  let s = str.trim().toLowerCase();
+  let neg = false;
+  if (s[0] === "-") { neg = true; s = s.slice(1); }
+  else if (s[0] === "+") s = s.slice(1);
+  if (/^0x/.test(s) && base === 16) s = s.slice(2);
+  else if (/^0b/.test(s) && base === 2) s = s.slice(2);
+  else if (/^0o/.test(s) && base === 8) s = s.slice(2);
+  s = s.replace(/[_ ]/g, "");
+  if (!s) throw new Error("empty");
+  const big = BigInt(base);
+  let n = 0n;
+  for (const ch of s) {
+    const d = DIGITS.indexOf(ch);
+    if (d < 0 || d >= base) throw new Error("bad digit '" + ch + "' for base " + base);
+    n = n * big + BigInt(d);
+  }
+  return neg ? -n : n;
+}
+
+function detectBase(s) {
+  s = s.trim().toLowerCase().replace(/^[-+]/, "");
+  if (/^0x/.test(s)) return 16;
+  if (/^0b/.test(s)) return 2;
+  if (/^0o/.test(s)) return 8;
+  return 10;
+}
+
+function groupBin(bits) {
+  const neg = bits[0] === "-";
+  if (neg) bits = bits.slice(1);
+  const pad = bits.padStart(Math.ceil(bits.length / 4) * 4, "0");
+  const grouped = pad.replace(/(.{4})(?=.)/g, "$1 ");
+  return (neg ? "-" : "") + grouped;
+}
+
+function render() {
+  const raw = $("value").value;
+  $("out").innerHTML = "";
+  if (!raw.trim()) { setStatus($("status"), ""); return; }
+  let base = $("base").value === "auto" ? detectBase(raw) : Number($("base").value);
+  let n;
+  try {
+    n = parseBase(raw, base);
+    setStatus($("status"), "read as base " + base, "ok");
+  } catch (e) {
+    setStatus($("status"), e.message, "err");
+    return;
+  }
+  const rows = [
+    ["Decimal", n.toString(10)],
+    ["Hex", (n < 0n ? "-0x" : "0x") + (n < 0n ? (-n) : n).toString(16).toUpperCase()],
+    ["Octal", (n < 0n ? "-0o" : "0o") + (n < 0n ? (-n) : n).toString(8)],
+    ["Binary", groupBin(n.toString(2))],
+    ["Bit length", (n < 0n ? -n : n).toString(2).length + " bits"],
+  ];
+  $("out").innerHTML = rows.map(([k, v]) =>
+    `<tr><td class="k">${esc(k)}</td><td class="v">${esc(v)}` +
+    `<button class="mini" data-copy="${esc(v.replace(/ /g, ""))}" title="Copy">📋</button></td></tr>`
+  ).join("");
+}
+
+$("value").addEventListener("input", render);
+$("base").addEventListener("change", render);
+$("clear").addEventListener("click", () => { $("value").value = ""; render(); $("value").focus(); });
+$("sample").addEventListener("click", () => { $("value").value = "0xDEADBEEF"; $("base").value = "auto"; render(); });
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-copy]");
+  if (btn) copyText(btn.dataset.copy, "Copied");
+});
+render();
+</script>
+</body>
+</html>

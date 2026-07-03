@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Escape Tool — Escape / Unescape Strings</title>
+<meta name="description" content="Escape and unescape strings for JSON, HTML, SQL, shell and regex. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/escape.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — String Escaper">
+<meta property="og:description" content="Escape and unescape strings for JSON, HTML, SQL, shell and regex. Runs offline in your browser.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — String Escaper">
+<meta name="twitter:description" content="Escape and unescape strings for JSON, HTML, SQL, shell and regex. Runs offline in your browser.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  textarea { height: 300px; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Escape<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+  </div>
+</header>
+
+<div class="options">
+  <select id="flavor" title="Escaping flavor">
+    <option value="json">JSON</option>
+    <option value="html">HTML</option>
+    <option value="sql">SQL ('' style)</option>
+    <option value="shell">Shell (single-quote)</option>
+    <option value="regex">Regex</option>
+  </select>
+  <select id="mode" title="Direction">
+    <option value="escape">Escape</option>
+    <option value="unescape">Unescape</option>
+  </select>
+  <button id="swap" title="Move output back to input">↰ Use output as input</button>
+  <button id="sample">Sample</button>
+  <button id="clear">Clear</button>
+  <button id="copy">📋 Copy output</button>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-header"><span>Input</span><span class="status" id="statusIn"></span></div>
+    <textarea id="input" placeholder="Type or paste text…" spellcheck="false"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-header"><span>Output</span><span class="status" id="statusOut"></span></div>
+    <textarea id="output" placeholder="Result appears here…" spellcheck="false" readonly></textarea>
+  </div>
+</div>
+
+<p class="hint">HTML unescape decodes entities safely (no script execution) · Shell wraps in single quotes · Regex/Shell unescape are best-effort · updates as you type</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+function htmlUnescape(s) {
+  // Decode entities without executing markup: parse as text, read textContent.
+  const doc = new DOMParser().parseFromString(s, "text/html");
+  return doc.documentElement.textContent;
+}
+
+const FLAVORS = {
+  json: {
+    escape: s => JSON.stringify(s).slice(1, -1),
+    unescape: s => JSON.parse('"' + s.replace(/\r?\n/g, "\\n").replace(/\t/g, "\\t") + '"'),
+  },
+  html: {
+    escape: s => esc(s),
+    unescape: htmlUnescape,
+  },
+  sql: {
+    escape: s => s.replace(/'/g, "''"),
+    unescape: s => s.replace(/''/g, "'"),
+  },
+  shell: {
+    escape: s => "'" + s.replace(/'/g, "'\\''") + "'",
+    unescape: s => s.replace(/^'(.*)'$/s, "$1").replace(/'\\''/g, "'"),
+  },
+  regex: {
+    escape: s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    unescape: s => s.replace(/\\([.*+?^${}()|[\]\\])/g, "$1"),
+  },
+};
+
+function run() {
+  const text = $("input").value;
+  setStatus($("statusIn"), "");
+  if (!text) { $("output").value = ""; setStatus($("statusOut"), ""); return; }
+  const fn = FLAVORS[$("flavor").value][$("mode").value];
+  try {
+    $("output").value = fn(text);
+    setStatus($("statusOut"), $("mode").value === "escape" ? "escaped" : "unescaped", "ok");
+  } catch (e) {
+    $("output").value = "";
+    setStatus($("statusOut"), e.message, "err");
+  }
+}
+
+const SAMPLES = {
+  json: 'He said "hi"\nLine\tTab',
+  html: '<a href="?a=1&b=2">Tom & Jerry</a>',
+  sql: "O'Reilly's book",
+  shell: "it's a $PATH; rm -rf /",
+  regex: "a.b*c+ (1|2) [x]",
+};
+
+$("input").addEventListener("input", run);
+$("flavor").addEventListener("change", run);
+$("mode").addEventListener("change", run);
+$("copy").addEventListener("click", () => copyText($("output").value, "Output copied"));
+$("clear").addEventListener("click", () => { $("input").value = ""; run(); });
+$("swap").addEventListener("click", () => {
+  if (!$("output").value) { toast("Output is empty"); return; }
+  $("input").value = $("output").value;
+  run();
+});
+$("sample").addEventListener("click", () => {
+  $("mode").value = "escape";
+  $("input").value = SAMPLES[$("flavor").value];
+  run();
+});
+run();
+</script>
+</body>
+</html>

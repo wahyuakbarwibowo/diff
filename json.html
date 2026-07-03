@@ -240,6 +240,20 @@ document.addEventListener("keydown", (e) => {
     act(() => JSON.stringify(getValue(), null, indentArg()), "formatted");
   }
 });
+
+// Drag either editor's resize handle and both follow.
+(function syncHeights() {
+  const boxes = [$("input"), $("output")];
+  let busy = false;
+  const ro = new ResizeObserver((entries) => {
+    if (busy) return;
+    busy = true;
+    const h = entries[0].target.style.height;
+    for (const b of boxes) b.style.height = h;
+    busy = false;
+  });
+  boxes.forEach(b => ro.observe(b));
+})();
 </script>
 </body>
 </html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Types Tool — JSON to TypeScript / Go</title>
+<meta name="description" content="Generate TypeScript interfaces or Go structs from a sample JSON object. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/types.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — JSON to Types">
+<meta property="og:description" content="Generate TypeScript interfaces or Go structs from a sample JSON object. Runs offline in your browser.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — JSON to Types">
+<meta name="twitter:description" content="Generate TypeScript interfaces or Go structs from a sample JSON object. Runs offline in your browser.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  textarea { height: 340px; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚡ Types<span>Tool</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+  </div>
+</header>
+
+<div class="options">
+  <select id="lang" title="Target language">
+    <option value="ts">TypeScript</option>
+    <option value="go">Go</option>
+  </select>
+  <input class="text" id="rootName" value="Root" title="Root type name" style="max-width:160px">
+  <button id="sample">Sample</button>
+  <button id="clear">Clear</button>
+  <button id="copy">📋 Copy output</button>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-header"><span>Sample JSON</span><span class="status" id="statusIn"></span></div>
+    <textarea id="input" placeholder="Paste a JSON object or array here…" spellcheck="false"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-header"><span>Output</span><span class="status" id="statusOut"></span></div>
+    <textarea id="output" placeholder="Generated types appear here…" spellcheck="false" readonly></textarea>
+  </div>
+</div>
+
+<p class="hint">Arrays of objects are merged into one type from the union of their keys · nested objects become named types · updates as you type</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+function pascal(s) {
+  const out = String(s).replace(/[^a-zA-Z0-9]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ""))
+    .replace(/^(.)/, (_, c) => c.toUpperCase());
+  return /^[A-Za-z]/.test(out) ? out : "F" + out;
+}
+const isIdent = (k) => /^[A-Za-z_$][\w$]*$/.test(k);
+const singular = (s) => s.replace(/s$/, "") || s;
+
+function generate(root, lang, rootName) {
+  const types = [];
+  const used = new Set();
+  function uniqueName(hint) {
+    let base = pascal(hint) || "T", name = base, i = 1;
+    while (used.has(name)) name = base + (++i);
+    used.add(name);
+    return name;
+  }
+  function prim(v) {
+    if (typeof v === "boolean") return lang === "go" ? "bool" : "boolean";
+    if (typeof v === "number") return lang === "go" ? (Number.isInteger(v) ? "int" : "float64") : "number";
+    return "string";
+  }
+  function walk(v, hint) {
+    if (v === null || v === undefined) return lang === "go" ? "interface{}" : "any";
+    if (Array.isArray(v)) {
+      if (!v.length) return lang === "go" ? "[]interface{}" : "any[]";
+      const t = elemType(v, singular(hint));
+      return lang === "go" ? "[]" + t : t + "[]";
+    }
+    if (typeof v === "object") {
+      const fields = Object.keys(v).map(k => ({ key: k, type: walk(v[k], k) }));
+      const name = uniqueName(hint);
+      types.push({ name, fields });
+      return name;
+    }
+    return prim(v);
+  }
+  function elemType(arr, hint) {
+    if (arr.every(x => x && typeof x === "object" && !Array.isArray(x))) {
+      const merged = {};
+      for (const o of arr) for (const k of Object.keys(o)) if (!(k in merged)) merged[k] = o[k];
+      return walk(merged, hint);
+    }
+    return walk(arr[0], hint);
+  }
+
+  let head = "";
+  if (Array.isArray(root)) {
+    // Array of objects → name the row type after rootName (you know it's rootName[]).
+    // Array of primitives → a small alias, since there's no shape to name.
+    const objRows = root.length && root.every(x => x && typeof x === "object" && !Array.isArray(x));
+    const elem = root.length ? elemType(root, objRows ? rootName : singular(rootName)) : (lang === "go" ? "interface{}" : "any");
+    if (!objRows) {
+      head = lang === "go" ? `type ${pascal(rootName)} []${elem}\n\n` : `type ${pascal(rootName)} = ${elem}[];\n\n`;
+    }
+  } else if (root !== null && typeof root === "object") {
+    used.add(pascal(rootName));
+    const fields = Object.keys(root).map(k => ({ key: k, type: walk(root[k], k) }));
+    types.push({ name: pascal(rootName), fields });
+  } else {
+    throw new Error("give a JSON object or array of objects");
+  }
+
+  types.reverse();
+  const body = types.map(t => emit(t, lang)).join("\n\n");
+  return head + body;
+}
+
+function emit(t, lang) {
+  if (lang === "go") {
+    const rows = t.fields.map(f => `\t${pascal(f.key)} ${f.type} \`json:"${f.key}"\``);
+    return `type ${t.name} struct {\n${rows.join("\n")}\n}`;
+  }
+  const rows = t.fields.map(f => `  ${isIdent(f.key) ? f.key : JSON.stringify(f.key)}: ${f.type};`);
+  return `interface ${t.name} {\n${rows.join("\n")}\n}`;
+}
+
+function run() {
+  const text = $("input").value.trim();
+  setStatus($("statusOut"), "");
+  if (!text) { $("output").value = ""; setStatus($("statusIn"), ""); return; }
+  let value;
+  try {
+    value = JSON.parse(text);
+    setStatus($("statusIn"), "valid JSON", "ok");
+  } catch (e) {
+    setStatus($("statusIn"), "invalid JSON: " + e.message, "err");
+    return;
+  }
+  try {
+    $("output").value = generate(value, $("lang").value, $("rootName").value.trim() || "Root");
+    setStatus($("statusOut"), "generated", "ok");
+  } catch (e) {
+    setStatus($("statusOut"), e.message, "err");
+  }
+}
+
+$("input").addEventListener("input", run);
+$("lang").addEventListener("change", run);
+$("rootName").addEventListener("input", run);
+$("copy").addEventListener("click", () => copyText($("output").value, "Output copied"));
+$("clear").addEventListener("click", () => { $("input").value = ""; run(); });
+$("sample").addEventListener("click", () => {
+  $("input").value = JSON.stringify({
+    id: 1, name: "Alice", active: true, score: 4.5,
+    roles: ["admin", "ops"],
+    address: { city: "Jakarta", zip: "12190" },
+    posts: [{ title: "Hello", views: 12 }],
+  }, null, 2);
+  run();
+});
+run();
+</script>
+</body>
+</html>

@@ -25,6 +25,38 @@
   --bad: #cf222e;
   --warn: #9a6700;
 }
+/* Command palette (Cmd/Ctrl+K) */
+#cmdk {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, .5);
+  padding-top: 12vh;
+}
+#cmdk.show { display: flex; justify-content: center; align-items: flex-start; }
+.cmdk-box {
+  width: min(520px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .4);
+}
+#cmdk-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+}
+#cmdk-list { list-style: none; max-height: 50vh; overflow-y: auto; }
+#cmdk-list li { padding: 10px 16px; cursor: pointer; color: var(--text); }
+#cmdk-list li.sel { background: var(--accent); color: #fff; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   background: var(--bg);
