@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penalty Shootout — beat the keeper</title>
+<meta name="description" content="Penalty shootout: 5 shots, one AI keeper. Tap where you want to shoot. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/penalty.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Penalty Shootout">
+<meta property="og:description" content="5 shots, one AI keeper. Tap where you want to shoot.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Penalty Shootout">
+<meta name="twitter:description" content="5 shots, one AI keeper, offline in your browser.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .stats { display: flex; gap: 24px; font-family: var(--mono); color: var(--muted); align-items: center; }
+  .stats b { color: var(--text); }
+  #shots { letter-spacing: 3px; font-size: 15px; }
+  #board {
+    border: 1px solid var(--border); border-radius: 8px;
+    max-width: 100%; height: auto; touch-action: none; cursor: crosshair;
+  }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⚽ Penalty<span>Shootout</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="restart" class="primary">↻ New shootout</button>
+  </div>
+</header>
+
+<div class="card wrap">
+  <div class="stats">
+    <span id="shots"></span>
+    <span>Goals: <b id="score">0</b></span>
+    <span>Best: <b id="best">0</b>/5</span>
+  </div>
+  <canvas id="board" width="480" height="360"></canvas>
+</div>
+
+<p class="hint">Tap or click where you want to shoot — inside the goal, away from the keeper · corners are riskier for the keeper to reach, the crossbar is riskier for you</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const W = 480, H = 360, BEST_KEY = "penalty-best";
+const board = $("board"), ctx = board.getContext("2d");
+
+// goal frame (front view)
+const GOAL = { x: 90, y: 70, w: 300, h: 120 };
+const BALL_START = { x: W / 2, y: 315 };
+const KEEPER_HOME = { x: W / 2, y: GOAL.y + GOAL.h - 34 };
+const REACH = 55; // keeper save radius around dive point
+const SHOTS = 5;
+
+let shot, goals, state, anim; // state: "aim" | "anim" | "done"
+let best = +localStorage.getItem(BEST_KEY) || 0;
+$("best").textContent = best;
+
+function css(name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+
+// keeper dive targets: 3 columns × 2 heights inside the goal
+const ZONES = [];
+for (const fx of [0.18, 0.5, 0.82])
+  for (const fy of [0.35, 0.75])
+    ZONES.push({ x: GOAL.x + GOAL.w * fx, y: GOAL.y + GOAL.h * fy });
+
+let results; // per-shot: "⚽" | "🧤" | "❌"
+
+function reset() {
+  shot = 0; goals = 0; state = "aim"; anim = null;
+  results = [];
+  $("score").textContent = 0;
+  updateShots();
+  draw();
+}
+
+function updateShots() {
+  $("shots").textContent = results.join("") + "·".repeat(SHOTS - results.length);
+}
+
+function drawKeeper(x, y, tilt) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tilt);
+  ctx.fillStyle = "#e0a020";
+  ctx.beginPath();
+  ctx.roundRect(-10, -18, 20, 36, 6); // body
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, -26, 8, 0, Math.PI * 2); // head
+  ctx.fill();
+  ctx.restore();
+}
+
+function draw(ball, keeper, banner) {
+  // pitch
+  ctx.fillStyle = "#2e7d32";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#276b2b";
+  for (let i = 0; i < 6; i++) ctx.fillRect(0, i * 60, W, 30); // mowing stripes
+  // penalty spot + box hint
+  ctx.strokeStyle = "rgba(255,255,255,.5)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(GOAL.x - 50, GOAL.y + GOAL.h, GOAL.w + 100, 130);
+  ctx.beginPath();
+  ctx.arc(BALL_START.x, BALL_START.y, 3, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,.7)";
+  ctx.fill();
+  // net
+  ctx.strokeStyle = "rgba(255,255,255,.25)";
+  ctx.lineWidth = 1;
+  for (let gx = GOAL.x; gx <= GOAL.x + GOAL.w; gx += 15) {
+    ctx.beginPath(); ctx.moveTo(gx, GOAL.y); ctx.lineTo(gx, GOAL.y + GOAL.h); ctx.stroke();
+  }
+  for (let gy = GOAL.y; gy <= GOAL.y + GOAL.h; gy += 15) {
+    ctx.beginPath(); ctx.moveTo(GOAL.x, gy); ctx.lineTo(GOAL.x + GOAL.w, gy); ctx.stroke();
+  }
+  // goal frame
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(GOAL.x, GOAL.y + GOAL.h);
+  ctx.lineTo(GOAL.x, GOAL.y);
+  ctx.lineTo(GOAL.x + GOAL.w, GOAL.y);
+  ctx.lineTo(GOAL.x + GOAL.w, GOAL.y + GOAL.h);
+  ctx.stroke();
+  // keeper
+  const k = keeper || KEEPER_HOME;
+  drawKeeper(k.x, k.y, k.tilt || 0);
+  // ball
+  const b = ball || BALL_START;
+  ctx.font = (b.r ? b.r * 2 : 22) + "px serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("⚽", b.x, b.y);
+  // banner
+  if (banner) {
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.fillRect(0, H / 2 - 28, W, 56);
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold 26px ${css("--mono")}`;
+    ctx.fillText(banner, W / 2, H / 2);
+  }
+}
+
+function endShootout() {
+  state = "done";
+  if (goals > best) {
+    best = goals;
+    localStorage.setItem(BEST_KEY, best);
+    $("best").textContent = best;
+    toast("New best! 🏆");
+  }
+  const verdict = goals === 5 ? "flawless deploy 🚀" : goals >= 3 ? "shipped with warnings" : "rollback 😬";
+  setTimeout(() => draw(null, null, `${goals}/5 — ${verdict}`), 900);
+}
+
+function shoot(target) {
+  state = "anim";
+  const offTarget = target.x < GOAL.x + 8 || target.x > GOAL.x + GOAL.w - 8 || target.y < GOAL.y + 8;
+  // keeper guesses: usually a random zone, sometimes reads your mind
+  const dive = Math.random() < 0.25
+    ? ZONES.reduce((a, z) => Math.hypot(z.x - target.x, z.y - target.y) < Math.hypot(a.x - target.x, a.y - target.y) ? z : a)
+    : ZONES[Math.floor(Math.random() * ZONES.length)];
+  const saved = !offTarget && Math.hypot(dive.x - target.x, dive.y - target.y) < REACH;
+
+  const t0 = performance.now(), DUR = 550;
+  function frame(now) {
+    const t = Math.min(1, (now - t0) / DUR);
+    const e = 1 - (1 - t) * (1 - t); // ease-out
+    const ball = {
+      x: BALL_START.x + (target.x - BALL_START.x) * e,
+      y: BALL_START.y + (target.y - BALL_START.y) * e - Math.sin(t * Math.PI) * 20,
+      r: 11 - 4 * e, // shrinks with depth
+    };
+    const keeper = {
+      x: KEEPER_HOME.x + (dive.x - KEEPER_HOME.x) * e,
+      y: KEEPER_HOME.y + (dive.y + 10 - KEEPER_HOME.y) * e,
+      tilt: (dive.x - KEEPER_HOME.x) / GOAL.w * 1.6 * e,
+    };
+    draw(ball, keeper);
+    if (t < 1) return requestAnimationFrame(frame);
+
+    const result = offTarget ? "❌" : saved ? "🧤" : "⚽";
+    results.push(result);
+    if (result === "⚽") { goals++; $("score").textContent = goals; }
+    updateShots();
+    draw(ball, keeper, offTarget ? "OFF TARGET ❌" : saved ? "SAVED 🧤" : "GOAL! ⚽");
+    shot++;
+    if (shot >= SHOTS) return endShootout();
+    setTimeout(() => { state = "aim"; draw(); }, 900);
+  }
+  requestAnimationFrame(frame);
+}
+
+function aimFrom(e) {
+  const rect = board.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  return {
+    x: (p.clientX - rect.left) * (W / rect.width),
+    y: (p.clientY - rect.top) * (H / rect.height),
+  };
+}
+
+board.addEventListener("click", (e) => {
+  if (state === "done") return reset();
+  if (state !== "aim") return;
+  shoot(aimFrom(e));
+});
+
+$("restart").addEventListener("click", reset);
+reset();
+</script>
+</body>
+</html>
