@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breakout — refactor the wall away</title>
+<meta name="description" content="Classic Breakout: paddle, ball, bricks. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/breakout.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Breakout">
+<meta property="og:description" content="Classic Breakout: paddle, ball, bricks.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Breakout">
+<meta name="twitter:description" content="Classic Breakout, offline in your browser.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .stats { display: flex; gap: 24px; font-family: var(--mono); color: var(--muted); }
+  .stats b { color: var(--text); }
+  #board {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    max-width: 100%; touch-action: none;
+  }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>🧱 Break<span>out</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="start" class="primary">▶ Start</button>
+  </div>
+</header>
+
+<div class="card wrap">
+  <div class="stats">
+    <span>Level: <b id="level">1</b></span>
+    <span>Score: <b id="score">0</b></span>
+    <span>Lives: <b id="lives">3</b></span>
+    <span>Best: <b id="best">0</b></span>
+  </div>
+  <canvas id="board" width="480" height="380"></canvas>
+</div>
+
+<p class="hint">Move the paddle with your mouse, ← → keys, or a finger · Space to pause · clear all bricks to win</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const W = 480, H = 380, BEST_KEY = "breakout-best";
+const board = $("board"), ctx = board.getContext("2d");
+const PADDLE_W = 80, PADDLE_H = 10, BALL_R = 6;
+const COLS = 8, ROWS = 5, BRICK_W = 54, BRICK_H = 16, BRICK_TOP = 40, BRICK_GAP = 5;
+
+let paddleX, ball, bricks, score, lives, level, running = false, raf = null;
+let best = +localStorage.getItem(BEST_KEY) || 0;
+$("best").textContent = best;
+
+function css(name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+const BRICK_COLORS = ["--bad", "--warn", "--ok", "--accent", "--muted"];
+
+function resetBall() {
+  const speed = 4 + (level - 1) * 0.8; // each level is faster
+  const angle = (Math.random() * 60 + 60) * Math.PI / 180; // launch upward-ish
+  ball = { x: W / 2, y: H - 60, dx: speed * Math.cos(angle), dy: -speed * Math.sin(angle) };
+}
+
+function buildBricks() {
+  bricks = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      bricks.push({ x: 8 + c * (BRICK_W + BRICK_GAP), y: BRICK_TOP + r * (BRICK_H + BRICK_GAP), row: r, alive: true });
+}
+
+function reset() {
+  paddleX = W / 2 - PADDLE_W / 2;
+  score = 0; lives = 3; level = 1;
+  buildBricks();
+  resetBall();
+  $("score").textContent = 0;
+  $("lives").textContent = 3;
+  $("level").textContent = 1;
+}
+
+function draw(overlayText) {
+  ctx.clearRect(0, 0, W, H);
+  for (const b of bricks) {
+    if (!b.alive) continue;
+    ctx.fillStyle = css(BRICK_COLORS[b.row]);
+    ctx.beginPath();
+    ctx.roundRect(b.x, b.y, BRICK_W, BRICK_H, 3);
+    ctx.fill();
+  }
+  ctx.fillStyle = css("--text");
+  ctx.beginPath();
+  ctx.roundRect(paddleX, H - PADDLE_H - 8, PADDLE_W, PADDLE_H, 5);
+  ctx.fill();
+  ctx.fillStyle = css("--accent");
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+  ctx.fill();
+  if (overlayText) {
+    ctx.fillStyle = css("--bg");
+    ctx.globalAlpha = 0.75;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = css("--text");
+    ctx.font = `bold 24px ${css("--mono")}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(overlayText, W / 2, H / 2);
+  }
+}
+
+function saveBest() {
+  if (score > best) {
+    best = score;
+    localStorage.setItem(BEST_KEY, best);
+    $("best").textContent = best;
+  }
+}
+
+function step() {
+  ball.x += ball.dx;
+  ball.y += ball.dy;
+
+  if (ball.x < BALL_R || ball.x > W - BALL_R) { ball.dx *= -1; ball.x = Math.max(BALL_R, Math.min(W - BALL_R, ball.x)); }
+  if (ball.y < BALL_R) { ball.dy *= -1; ball.y = BALL_R; }
+
+  // paddle bounce; hit position steers the ball
+  const py = H - PADDLE_H - 8;
+  if (ball.dy > 0 && ball.y + BALL_R >= py && ball.y + BALL_R <= py + PADDLE_H + 6 &&
+      ball.x >= paddleX - BALL_R && ball.x <= paddleX + PADDLE_W + BALL_R) {
+    const hit = (ball.x - (paddleX + PADDLE_W / 2)) / (PADDLE_W / 2); // -1..1
+    const speed = Math.hypot(ball.dx, ball.dy);
+    const angle = hit * (Math.PI / 3); // up to 60° from vertical
+    ball.dx = speed * Math.sin(angle);
+    ball.dy = -Math.abs(speed * Math.cos(angle));
+    ball.y = py - BALL_R;
+  }
+
+  for (const b of bricks) {
+    if (!b.alive) continue;
+    if (ball.x + BALL_R < b.x || ball.x - BALL_R > b.x + BRICK_W ||
+        ball.y + BALL_R < b.y || ball.y - BALL_R > b.y + BRICK_H) continue;
+    b.alive = false;
+    score += (ROWS - b.row) * 10; // top rows worth more
+    $("score").textContent = score;
+    // bounce off the nearest face
+    const fromLeft = Math.abs(ball.x - b.x), fromRight = Math.abs(ball.x - (b.x + BRICK_W));
+    const fromTop = Math.abs(ball.y - b.y), fromBottom = Math.abs(ball.y - (b.y + BRICK_H));
+    const min = Math.min(fromLeft, fromRight, fromTop, fromBottom);
+    if (min === fromTop || min === fromBottom) ball.dy *= -1; else ball.dx *= -1;
+    break;
+  }
+
+  if (bricks.every(b => !b.alive)) {
+    level++;
+    $("level").textContent = level;
+    buildBricks();
+    resetBall();
+    toast(`Wall refactored — level ${level}, ball is faster 🚀`);
+  }
+
+  if (ball.y > H + BALL_R) {
+    lives--;
+    $("lives").textContent = lives;
+    if (lives <= 0) {
+      running = false;
+      saveBest();
+      draw("💥 out of lives — " + score);
+      $("start").textContent = "↻ Restart";
+      return;
+    }
+    resetBall();
+  }
+
+  draw();
+  raf = requestAnimationFrame(step);
+}
+
+function start() {
+  cancelAnimationFrame(raf);
+  reset();
+  running = true;
+  $("start").textContent = "↻ Restart";
+  raf = requestAnimationFrame(step);
+}
+
+function togglePause() {
+  if (lives <= 0 || bricks.every(b => !b.alive)) return;
+  running = !running;
+  if (running) raf = requestAnimationFrame(step);
+  else { cancelAnimationFrame(raf); draw("⏸ paused"); }
+}
+
+function movePaddle(clientX) {
+  const rect = board.getBoundingClientRect();
+  const x = (clientX - rect.left) * (W / rect.width);
+  paddleX = Math.max(0, Math.min(W - PADDLE_W, x - PADDLE_W / 2));
+  if (!running) draw();
+}
+
+board.addEventListener("mousemove", (e) => movePaddle(e.clientX));
+board.addEventListener("touchmove", (e) => movePaddle(e.touches[0].clientX), { passive: true });
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === " ") { e.preventDefault(); return togglePause(); }
+  if (e.key === "ArrowLeft") { paddleX = Math.max(0, paddleX - 28); if (!running) draw(); }
+  if (e.key === "ArrowRight") { paddleX = Math.min(W - PADDLE_W, paddleX + 28); if (!running) draw(); }
+});
+
+$("start").addEventListener("click", start);
+
+reset();
+draw("▶ press Start");
+</script>
+</body>
+</html>

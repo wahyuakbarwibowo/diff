@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regex Golf — shortest regex wins</title>
+<meta name="description" content="Regex golf: write the shortest regex that matches every word on the left and none on the right. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/regexgolf.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Regex Golf">
+<meta property="og:description" content="Write the shortest regex that matches every word on the left and none on the right.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Regex Golf">
+<meta name="twitter:description" content="Shortest regex that matches all, skips all.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .golf-input { display: flex; gap: 10px; align-items: center; font-family: var(--mono); font-size: 16px; margin-bottom: 14px; }
+  .golf-input input {
+    flex: 1; font: inherit; padding: 10px 12px;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; outline: none;
+  }
+  .golf-input input:focus { border-color: var(--accent); }
+  .word { display: inline-block; margin: 3px; padding: 3px 9px; border-radius: 12px; font-family: var(--mono); font-size: 13px; border: 1px solid var(--border); color: var(--muted); }
+  .word.hit { border-color: var(--ok); color: var(--ok); }
+  .word.oops { border-color: var(--bad); color: var(--bad); }
+  .stats { font-family: var(--mono); color: var(--muted); }
+  .stats b { color: var(--text); }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⛳ Regex<span>Golf</span></h1>
+  <div class="controls">
+    <select id="level" title="Level"></select>
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+  </div>
+</header>
+
+<div class="card">
+  <div class="golf-input">/<input id="re" placeholder="your regex…" autocomplete="off" spellcheck="false">/ <span class="status" id="status"></span></div>
+  <div class="stats">Strokes: <b id="len">0</b> · Par: <b id="par">–</b> · Your best: <b id="best">–</b></div>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="pane-header"><span>✅ Match all of these</span></div>
+    <div class="card" id="matchList" style="border:none"></div>
+  </div>
+  <div class="pane">
+    <div class="pane-header"><span>🚫 Match none of these</span></div>
+    <div class="card" id="skipList" style="border:none"></div>
+  </div>
+</div>
+
+<p class="hint">Green pill = your regex matches it · a red pill on the right side means an accidental match · fewer characters is better golf</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const LEVELS = [
+  { name: "Warmup: foo", par: 3,
+    match: ["food", "foot", "fool", "foolproof", "buffoon"],
+    skip: ["bar", "baz", "qux", "fob", "of"] },
+  { name: "Vowels at both ends", par: 8,
+    match: ["area", "echo", "idea", "oreo", "umbra", "arena"],
+    skip: ["tree", "stack", "queue", "graph", "list"] },
+  { name: "Doubles", par: 5,
+    match: ["committee", "coffee", "balloon", "assert", "puppet", "success"],
+    skip: ["cache", "token", "parse", "regex", "input"] },
+  { name: "Powers of two", par: 26,
+    match: ["2", "4", "8", "16", "32", "64", "128", "256"],
+    skip: ["3", "6", "10", "24", "100", "255", "129", "65"] },
+  { name: "Keywords vs identifiers", par: 20,
+    match: ["for", "while", "if", "else", "return", "const"],
+    skip: ["forEach", "whileTrue", "iffy", "elsewhere", "returned", "constant"] },
+];
+
+const BEST_KEY = "regexgolf-best";
+let best = {};
+try { best = JSON.parse(localStorage.getItem(BEST_KEY)) || {}; } catch (e) { /* ignore */ }
+
+$("level").innerHTML = LEVELS.map((l, i) => `<option value="${i}">${i + 1}. ${esc(l.name)}</option>`).join("");
+
+function pills(words, re, wantMatch) {
+  return words.map(w => {
+    const m = re ? re.test(w) : false;
+    const cls = m ? (wantMatch ? "hit" : "oops") : "";
+    return `<span class="word ${cls}">${esc(w)}</span>`;
+  }).join("");
+}
+
+function check() {
+  const lvl = LEVELS[+$("level").value];
+  const src = $("re").value;
+  $("len").textContent = src.length;
+  $("par").textContent = lvl.par;
+  $("best").textContent = best[$("level").value] ?? "–";
+
+  let re = null;
+  if (src) {
+    try { re = new RegExp(src); setStatus($("status"), ""); }
+    catch (e) { setStatus($("status"), "invalid regex", "err"); }
+  } else {
+    setStatus($("status"), "");
+  }
+
+  $("matchList").innerHTML = pills(lvl.match, re, true);
+  $("skipList").innerHTML = pills(lvl.skip, re, false);
+
+  if (re && lvl.match.every(w => re.test(w)) && !lvl.skip.some(w => re.test(w))) {
+    setStatus($("status"), "solved in " + src.length, "ok");
+    const key = $("level").value;
+    if (!(key in best) || src.length < best[key]) {
+      best[key] = src.length;
+      try { localStorage.setItem(BEST_KEY, JSON.stringify(best)); } catch (e) { /* quota */ }
+      $("best").textContent = best[key];
+      toast(src.length <= lvl.par ? "Under par! ⛳🏆" : "Solved! Now shave some strokes ⛳");
+    }
+  }
+}
+
+$("re").addEventListener("input", check);
+$("level").addEventListener("change", () => { $("re").value = ""; check(); $("re").focus(); });
+check();
+$("re").focus();
+</script>
+</body>
+</html>

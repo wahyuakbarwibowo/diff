@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hex Guesser — see the color, guess the hex</title>
+<meta name="description" content="Train your eye: see a color, pick its hex code. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/hexguess.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Hex Guesser">
+<meta property="og:description" content="See a color, pick its hex code.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Hex Guesser">
+<meta name="twitter:description" content="See a color, pick its hex code.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .quiz { max-width: 560px; margin: 0 auto; text-align: center; }
+  #swatch { height: 160px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 20px; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .choices button {
+    padding: 14px; font-family: var(--mono); font-size: 16px;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  }
+  .choices button:hover:not(:disabled) { border-color: var(--accent); }
+  .choices button.right { border-color: var(--ok); color: var(--ok); }
+  .choices button.wrongpick { border-color: var(--bad); color: var(--bad); }
+  .stats { display: flex; justify-content: center; gap: 24px; font-family: var(--mono); color: var(--muted); margin-top: 18px; }
+  .stats b { color: var(--text); }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>🎨 Hex<span>Guesser</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+  </div>
+</header>
+
+<div class="card quiz">
+  <div id="swatch"></div>
+  <div class="choices" id="choices"></div>
+  <div class="stats">
+    <span>Streak: <b id="streak">0</b></span>
+    <span>Best streak: <b id="beststreak">0</b></span>
+  </div>
+</div>
+
+<p class="hint">Press 1–4 to answer · the wrong options are nearby colors, so squint hard</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const BEST_KEY = "hexguess-best";
+let streak = 0, answer, locked = false;
+let bestStreak = +localStorage.getItem(BEST_KEY) || 0;
+$("beststreak").textContent = bestStreak;
+
+const rand = (n) => Math.floor(Math.random() * n);
+const clamp = (v) => Math.max(0, Math.min(255, v));
+const toHex = (rgb) => "#" + rgb.map(c => c.toString(16).padStart(2, "0")).join("");
+
+function nearby(rgb) {
+  // shift each channel by ±24..80 so distractors are plausible but distinct
+  return rgb.map(c => {
+    const shift = (24 + rand(57)) * (Math.random() < 0.5 ? -1 : 1);
+    return clamp(c + shift);
+  });
+}
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = rand(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function ask() {
+  locked = false;
+  const rgb = [rand(256), rand(256), rand(256)];
+  answer = toHex(rgb);
+  const options = new Set([answer]);
+  while (options.size < 4) options.add(toHex(nearby(rgb)));
+  $("swatch").style.background = answer;
+  $("choices").innerHTML = shuffle([...options]).map((hex, i) =>
+    `<button data-hex="${hex}">${i + 1}. ${hex}</button>`).join("");
+}
+
+function pickButton(btn) {
+  if (locked || !btn) return;
+  locked = true;
+  const right = btn.dataset.hex === answer;
+  for (const b of $("choices").children) {
+    b.disabled = true;
+    if (b.dataset.hex === answer) b.classList.add("right");
+  }
+  if (right) {
+    streak++;
+    if (streak > bestStreak) {
+      bestStreak = streak;
+      localStorage.setItem(BEST_KEY, bestStreak);
+      $("beststreak").textContent = bestStreak;
+    }
+  } else {
+    btn.classList.add("wrongpick");
+    streak = 0;
+  }
+  $("streak").textContent = streak;
+  setTimeout(ask, right ? 700 : 1600);
+}
+
+$("choices").addEventListener("click", (e) => pickButton(e.target.closest("button")));
+
+document.addEventListener("keydown", (e) => {
+  const i = +e.key - 1;
+  if (i >= 0 && i < 4) pickButton($("choices").children[i]);
+});
+
+ask();
+</script>
+</body>
+</html>

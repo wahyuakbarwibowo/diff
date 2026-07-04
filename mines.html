@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minesweeper — the office classic</title>
+<meta name="description" content="Classic Minesweeper: 9×9 grid, 10 mines, right-click to flag. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/mines.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Minesweeper">
+<meta property="og:description" content="Classic Minesweeper: 9×9 grid, 10 mines, right-click to flag.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Minesweeper">
+<meta name="twitter:description" content="Classic Minesweeper, offline in your browser.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .stats { display: flex; gap: 24px; font-family: var(--mono); color: var(--muted); }
+  .stats b { color: var(--text); }
+  #grid { display: grid; grid-template-columns: repeat(9, 36px); gap: 3px; user-select: none; }
+  #grid button {
+    width: 36px; height: 36px; padding: 0;
+    font-family: var(--mono); font-size: 15px; font-weight: 700; line-height: 1;
+    background: var(--accent); border: 1px solid var(--border); border-radius: 5px;
+    cursor: pointer; opacity: .85;
+  }
+  #grid button:hover { opacity: 1; }
+  #grid button.open {
+    background: var(--panel); cursor: default; opacity: 1;
+  }
+  #grid button.boom { background: var(--bad); }
+  .n1 { color: var(--accent); } .n2 { color: var(--ok); } .n3 { color: var(--bad); }
+  .n4 { color: #a371f7; } .n5 { color: var(--warn); } .n6 { color: #39c5cf; }
+  .n7 { color: var(--text); } .n8 { color: var(--muted); }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>💣 Mine<span>sweeper</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="restart" class="primary">↻ New game</button>
+  </div>
+</header>
+
+<div class="card wrap">
+  <div class="stats">
+    <span>Mines left: <b id="left">10</b></span>
+    <span id="face">🙂</span>
+    <span>Time: <b id="time">0</b>s</span>
+    <span>Wins: <b id="wins">0</b></span>
+  </div>
+  <div id="grid"></div>
+</div>
+
+<p class="hint">Left-click to reveal · right-click (or long-press) to flag 🚩 · first click is always safe</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const N = 9, MINES = 10, WINS_KEY = "mines-wins";
+let cells, started, over, flags, seconds, clock = null;
+let wins = +localStorage.getItem(WINS_KEY) || 0;
+$("wins").textContent = wins;
+
+const grid = $("grid");
+const idx = (r, c) => r * N + c;
+const inBounds = (r, c) => r >= 0 && r < N && c >= 0 && c < N;
+
+function neighbors(i) {
+  const r = Math.floor(i / N), c = i % N, out = [];
+  for (let dr = -1; dr <= 1; dr++)
+    for (let dc = -1; dc <= 1; dc++)
+      if ((dr || dc) && inBounds(r + dr, c + dc)) out.push(idx(r + dr, c + dc));
+  return out;
+}
+
+function stopClock() { clearInterval(clock); clock = null; }
+
+function reset() {
+  cells = Array.from({ length: N * N }, () => ({ mine: false, open: false, flag: false, count: 0 }));
+  started = false; over = false; flags = 0; seconds = 0;
+  stopClock();
+  $("time").textContent = 0;
+  $("left").textContent = MINES;
+  $("face").textContent = "🙂";
+  grid.innerHTML = cells.map((_, i) => `<button data-i="${i}"></button>`).join("");
+}
+
+function placeMines(safe) {
+  const banned = new Set([safe, ...neighbors(safe)]);
+  let placed = 0;
+  while (placed < MINES) {
+    const i = Math.floor(Math.random() * N * N);
+    if (banned.has(i) || cells[i].mine) continue;
+    cells[i].mine = true;
+    placed++;
+  }
+  for (let i = 0; i < cells.length; i++) {
+    cells[i].count = neighbors(i).filter(n => cells[n].mine).length;
+  }
+}
+
+function btn(i) { return grid.children[i]; }
+
+function reveal(i) {
+  const c = cells[i];
+  if (c.open || c.flag) return;
+  c.open = true;
+  const b = btn(i);
+  b.classList.add("open");
+  if (c.mine) return; // caller handles boom
+  if (c.count) {
+    b.textContent = c.count;
+    b.classList.add("n" + c.count);
+  } else {
+    neighbors(i).forEach(reveal); // flood-fill zeros
+  }
+}
+
+function lose(hit) {
+  over = true;
+  stopClock();
+  $("face").textContent = "💀";
+  cells.forEach((c, i) => {
+    if (c.mine) { btn(i).classList.add("open"); btn(i).textContent = "💣"; }
+  });
+  btn(hit).classList.add("boom");
+  toast("Boom. Deployed on a Friday. 💥");
+}
+
+function checkWin() {
+  if (cells.some(c => !c.mine && !c.open)) return;
+  over = true;
+  stopClock();
+  $("face").textContent = "😎";
+  wins++;
+  localStorage.setItem(WINS_KEY, wins);
+  $("wins").textContent = wins;
+  toast(`All clear in ${seconds}s — ship it! 🚀`);
+}
+
+grid.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-i]");
+  if (!b || over) return;
+  if (suppressClick) { suppressClick = false; return; }
+  const i = +b.dataset.i;
+  if (cells[i].flag) return;
+  if (!started) {
+    placeMines(i);
+    started = true;
+    clock = setInterval(() => { $("time").textContent = ++seconds; }, 1000);
+  }
+  if (cells[i].mine) { reveal(i); return lose(i); }
+  reveal(i);
+  checkWin();
+});
+
+function toggleFlag(i) {
+  const c = cells[i];
+  if (over || c.open) return;
+  c.flag = !c.flag;
+  flags += c.flag ? 1 : -1;
+  btn(i).textContent = c.flag ? "🚩" : "";
+  $("left").textContent = MINES - flags;
+}
+
+grid.addEventListener("contextmenu", (e) => {
+  const b = e.target.closest("button[data-i]");
+  if (!b) return;
+  e.preventDefault();
+  toggleFlag(+b.dataset.i);
+});
+
+// long-press = flag on touch screens
+let pressTimer = null, suppressClick = false;
+grid.addEventListener("touchstart", (e) => {
+  const b = e.target.closest("button[data-i]");
+  if (!b) return;
+  pressTimer = setTimeout(() => {
+    toggleFlag(+b.dataset.i);
+    suppressClick = true; // swallow the click that follows the long-press
+    pressTimer = null;
+  }, 450);
+}, { passive: true });
+grid.addEventListener("touchend", () => clearTimeout(pressTimer));
+grid.addEventListener("touchmove", () => clearTimeout(pressTimer));
+
+$("restart").addEventListener("click", reset);
+reset();
+</script>
+</body>
+</html>

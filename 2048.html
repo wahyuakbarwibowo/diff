@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2048 — merge tiles, lose an afternoon</title>
+<meta name="description" content="The classic 2048 puzzle: merge tiles with arrow keys or swipes to reach 2048. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/2048.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — 2048">
+<meta property="og:description" content="Merge tiles with arrow keys or swipes to reach 2048.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — 2048">
+<meta name="twitter:description" content="The classic 2048 puzzle, offline in your browser.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .stats { display: flex; gap: 24px; font-family: var(--mono); color: var(--muted); }
+  .stats b { color: var(--text); }
+  #grid {
+    position: relative;
+    display: grid; grid-template-columns: repeat(4, 84px); gap: 8px;
+    padding: 8px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; touch-action: none; user-select: none;
+  }
+  .cell {
+    width: 84px; height: 84px; border-radius: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+  .tile {
+    position: absolute; width: 84px; height: 84px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700; font-size: 26px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    transition: left .12s ease, top .12s ease;
+  }
+  .tile.pop { animation: pop .16s ease; }
+  @keyframes pop { from { transform: scale(.4); } }
+  .tile[data-v="2"]    { background: #3a4048; color: #e6edf3; }
+  .tile[data-v="4"]    { background: #4a5568; color: #e6edf3; }
+  .tile[data-v="8"]    { background: #d29922; color: #fff; }
+  .tile[data-v="16"]   { background: #bb7a1c; color: #fff; }
+  .tile[data-v="32"]   { background: #f0883e; color: #fff; }
+  .tile[data-v="64"]   { background: #f85149; color: #fff; }
+  .tile[data-v="128"]  { background: #3fb950; color: #fff; font-size: 22px; }
+  .tile[data-v="256"]  { background: #2ea043; color: #fff; font-size: 22px; }
+  .tile[data-v="512"]  { background: #58a6ff; color: #fff; font-size: 22px; }
+  .tile[data-v="1024"] { background: #388bfd; color: #fff; font-size: 19px; }
+  .tile[data-v="2048"] { background: #a371f7; color: #fff; font-size: 19px; }
+  .tile[data-v="4096"] { background: #8957e5; color: #fff; font-size: 19px; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>🔢 20<span>48</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="restart" class="primary">↻ New game</button>
+  </div>
+</header>
+
+<div class="card wrap">
+  <div class="stats">
+    <span>Score: <b id="score">0</b></span>
+    <span>Best: <b id="best">0</b></span>
+  </div>
+  <div id="grid"></div>
+</div>
+
+<p class="hint">Arrow keys / WASD to slide · swipe on touch screens · equal tiles merge · reach 2048 (then keep going)</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const BEST_KEY = "2048-best";
+let cells, score, won, animating = false;
+let best = +localStorage.getItem(BEST_KEY) || 0;
+
+const grid = $("grid");
+grid.innerHTML = Array.from({ length: 16 }, () => `<div class="cell"></div>`).join("");
+
+const px = (i) => ({ left: 8 + (i % 4) * 92, top: 8 + Math.floor(i / 4) * 92 });
+
+function makeTile(v, i, pop) {
+  const d = document.createElement("div");
+  d.className = "tile" + (pop ? " pop" : "");
+  d.textContent = v;
+  d.dataset.v = Math.min(v, 4096);
+  const p = px(i);
+  d.style.left = p.left + "px";
+  d.style.top = p.top + "px";
+  return d;
+}
+
+function spawn() {
+  const empty = cells.flatMap((v, i) => v === 0 ? [i] : []);
+  if (!empty.length) return -1;
+  const i = empty[Math.floor(Math.random() * empty.length)];
+  cells[i] = Math.random() < 0.9 ? 2 : 4;
+  return i;
+}
+
+function reset() {
+  cells = Array(16).fill(0);
+  score = 0; won = false; animating = false;
+  spawn(); spawn();
+  draw();
+}
+
+function draw(popIdx) {
+  grid.querySelectorAll(".tile").forEach(t => t.remove());
+  cells.forEach((v, i) => { if (v) grid.appendChild(makeTile(v, i, i === popIdx)); });
+  $("score").textContent = score;
+  if (score > best) { best = score; localStorage.setItem(BEST_KEY, best); }
+  $("best").textContent = best;
+}
+
+// extract row i of the board as seen from a direction
+const LINES = {
+  left:  (i) => [0, 1, 2, 3].map(j => i * 4 + j),
+  right: (i) => [3, 2, 1, 0].map(j => i * 4 + j),
+  up:    (i) => [0, 1, 2, 3].map(j => j * 4 + i),
+  down:  (i) => [3, 2, 1, 0].map(j => j * 4 + i),
+};
+
+function move(dir) {
+  if (animating) return;
+  const next = Array(16).fill(0);
+  const anims = []; // {from, to, v} — where each existing tile slides to
+  for (let i = 0; i < 4; i++) {
+    const idxs = LINES[dir](i);
+    let write = 0, prevVal = 0, prevAt = -1;
+    for (const from of idxs) {
+      const v = cells[from];
+      if (!v) continue;
+      if (v === prevVal) { // merge into the tile written just before
+        const to = idxs[prevAt];
+        next[to] = v * 2;
+        score += v * 2;
+        if (v * 2 === 2048 && !won) { won = true; toast("2048! You win 🏆 (keep going if you like)"); }
+        anims.push({ from, to, v });
+        prevVal = 0; // a tile merges at most once per move
+      } else {
+        const to = idxs[write];
+        next[to] = v;
+        anims.push({ from, to, v });
+        prevVal = v; prevAt = write; write++;
+      }
+    }
+  }
+  if (next.join() === cells.join()) return; // nothing moved
+
+  // slide: rebuild tiles at old positions, then transition them to new ones
+  animating = true;
+  grid.querySelectorAll(".tile").forEach(t => t.remove());
+  const els = anims.map(a => grid.appendChild(makeTile(a.v, a.from)));
+  void grid.offsetWidth; // force reflow so the transition kicks in
+  anims.forEach((a, j) => {
+    const p = px(a.to);
+    els[j].style.left = p.left + "px";
+    els[j].style.top = p.top + "px";
+  });
+  setTimeout(() => {
+    cells = next;
+    const popIdx = spawn();
+    draw(popIdx);
+    animating = false;
+    if (isStuck()) toast("No moves left — segfault. ↻ New game 💀");
+  }, 130);
+}
+
+function isStuck() {
+  if (cells.includes(0)) return false;
+  for (let i = 0; i < 16; i++) {
+    if (i % 4 < 3 && cells[i] === cells[i + 1]) return false;
+    if (i < 12 && cells[i] === cells[i + 4]) return false;
+  }
+  return true;
+}
+
+const KEYS = {
+  ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down",
+  a: "left", d: "right", w: "up", s: "down",
+};
+
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const dir = KEYS[e.key];
+  if (!dir) return;
+  e.preventDefault();
+  move(dir);
+});
+
+let touch = null;
+grid.addEventListener("touchstart", (e) => { touch = e.touches[0]; }, { passive: true });
+grid.addEventListener("touchend", (e) => {
+  if (!touch) return;
+  const dx = e.changedTouches[0].clientX - touch.clientX;
+  const dy = e.changedTouches[0].clientY - touch.clientY;
+  touch = null;
+  if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+  move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+});
+
+$("restart").addEventListener("click", reset);
+reset();
+</script>
+</body>
+</html>

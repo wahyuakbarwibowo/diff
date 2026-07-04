@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Games — take a break from the code</title>
+<meta name="description" content="Tiny offline games for programmers who need a break: Snake, Minesweeper, 2048, typing test, regex golf and more. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/games.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Games">
+<meta property="og:description" content="Tiny offline games for programmers who need a break: Snake, Minesweeper, 2048, typing test, regex golf and more.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Games">
+<meta name="twitter:description" content="Tiny offline games for programmers who need a break.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .games a {
+    display: block; padding: 18px; text-decoration: none;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); transition: border-color .15s;
+  }
+  .games a:hover { border-color: var(--accent); }
+  .games .icon { font-size: 30px; }
+  .games h2 { font-size: 16px; margin: 8px 0 4px; }
+  .games p { font-size: 13px; color: var(--muted); margin: 0; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>🎮 Game<span>Break</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+  </div>
+</header>
+
+<div class="games">
+  <a href="game.html"><span class="icon">🐛</span><h2>Bug Hunt</h2><p>Snake. Eat the bugs, don't crash the build.</p></a>
+  <a href="typing.html"><span class="icon">⌨️</span><h2>Code Typing</h2><p>Type real code snippets. WPM &amp; accuracy.</p></a>
+  <a href="regexgolf.html"><span class="icon">⛳</span><h2>Regex Golf</h2><p>Match all, skip the rest, shortest regex wins.</p></a>
+  <a href="httpquiz.html"><span class="icon">🚦</span><h2>HTTP Status Quiz</h2><p>418 is…? Build your streak.</p></a>
+  <a href="hexguess.html"><span class="icon">🎨</span><h2>Hex Guesser</h2><p>See the color, guess the hex code.</p></a>
+  <a href="mines.html"><span class="icon">💣</span><h2>Minesweeper</h2><p>The office classic. 9×9, 10 mines.</p></a>
+  <a href="2048.html"><span class="icon">🔢</span><h2>2048</h2><p>Merge tiles, reach 2048, lose an afternoon.</p></a>
+  <a href="breakout.html"><span class="icon">🧱</span><h2>Breakout</h2><p>Paddle, ball, bricks. Refactor the wall away.</p></a>
+</div>
+
+<p class="hint">Everything runs offline in your browser — no network, no tracking, no excuses to stop playing</p>
+<div id="toast"></div>
+</body>
+</html>

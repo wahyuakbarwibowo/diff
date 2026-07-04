@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Typing — typing speed test with real code</title>
+<meta name="description" content="Typing speed test using real code snippets. Measures WPM and accuracy. Runs offline in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/typing.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Code Typing">
+<meta property="og:description" content="Typing speed test using real code snippets. Measures WPM and accuracy.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Code Typing">
+<meta name="twitter:description" content="Typing speed test using real code snippets.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  .stats { display: flex; gap: 24px; font-family: var(--mono); color: var(--muted); margin-bottom: 12px; }
+  .stats b { color: var(--text); }
+  #snippet {
+    font-family: var(--mono); font-size: 15px; line-height: 1.7;
+    white-space: pre-wrap; word-break: break-all;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 18px; cursor: text; outline: none;
+  }
+  #snippet:focus { border-color: var(--accent); }
+  #snippet .done { color: var(--ok); }
+  #snippet .bad { color: var(--bad); background: rgba(248,81,73,.18); border-radius: 2px; }
+  #snippet .cur { border-left: 2px solid var(--accent); margin-left: -2px; animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { border-color: transparent; } }
+  #snippet .todo { color: var(--muted); }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>⌨️ Code<span>Typing</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="next" class="primary">↻ New snippet</button>
+  </div>
+</header>
+
+<div class="card">
+  <div class="stats">
+    <span>WPM: <b id="wpm">–</b></span>
+    <span>Accuracy: <b id="acc">–</b></span>
+    <span>Best WPM: <b id="best">–</b></span>
+  </div>
+  <div id="snippet" tabindex="0"></div>
+</div>
+
+<p class="hint">Click the code and start typing — the timer starts on your first key · Enter for newlines, spaces for indentation · Backspace works</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const SNIPPETS = [
+`function debounce(fn, ms) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}`,
+`const unique = (arr) => [...new Set(arr)];
+const sum = (arr) => arr.reduce((a, b) => a + b, 0);`,
+`async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(res.status);
+  return res.json();
+}`,
+`for (let i = 1; i <= 100; i++) {
+  let out = "";
+  if (i % 3 === 0) out += "Fizz";
+  if (i % 5 === 0) out += "Buzz";
+  console.log(out || i);
+}`,
+`def quicksort(xs):
+    if len(xs) <= 1:
+        return xs
+    p, *rest = xs
+    return quicksort([x for x in rest if x < p]) + [p] + quicksort([x for x in rest if x >= p])`,
+`SELECT name, COUNT(*) AS total
+FROM orders
+GROUP BY name
+HAVING COUNT(*) > 5
+ORDER BY total DESC;`,
+`git stash
+git checkout main
+git pull --rebase
+git checkout -
+git stash pop`,
+`const memo = new Map();
+function fib(n) {
+  if (n < 2) return n;
+  if (!memo.has(n)) memo.set(n, fib(n - 1) + fib(n - 2));
+  return memo.get(n);
+}`,
+];
+
+const BEST_KEY = "codetyping-best";
+let text, pos, wrong, startTime, keystrokes, errors, lastIdx = -1;
+
+const el = $("snippet");
+let best = +localStorage.getItem(BEST_KEY) || 0;
+$("best").textContent = best || "–";
+
+function pick() {
+  let i;
+  do { i = Math.floor(Math.random() * SNIPPETS.length); } while (i === lastIdx && SNIPPETS.length > 1);
+  lastIdx = i;
+  text = SNIPPETS[i];
+  pos = 0; wrong = 0; startTime = null; keystrokes = 0; errors = 0;
+  $("wpm").textContent = "–";
+  $("acc").textContent = "–";
+  render();
+}
+
+function render() {
+  const parts = [];
+  if (pos > 0) parts.push(`<span class="done">${esc(text.slice(0, pos))}</span>`);
+  if (wrong > 0) parts.push(`<span class="bad">${esc(text.slice(pos, pos + wrong))}</span>`);
+  const cur = pos + wrong;
+  if (cur < text.length) {
+    parts.push(`<span class="cur"></span><span class="todo">${esc(text.slice(cur))}</span>`);
+  }
+  el.innerHTML = parts.join("");
+}
+
+function updateStats(final) {
+  if (!startTime) return;
+  const mins = (Date.now() - startTime) / 60000;
+  const wpm = Math.round((pos / 5) / mins) || 0;
+  $("wpm").textContent = wpm;
+  $("acc").textContent = keystrokes ? Math.round((keystrokes - errors) / keystrokes * 100) + "%" : "–";
+  if (final && wpm > best) {
+    best = wpm;
+    localStorage.setItem(BEST_KEY, best);
+    $("best").textContent = best;
+    toast("New best WPM! 🏆");
+  }
+}
+
+el.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === "Backspace") {
+    e.preventDefault();
+    if (wrong > 0) wrong--;
+    else if (pos > 0) pos--;
+    render();
+    return;
+  }
+  const ch = e.key === "Enter" ? "\n" : e.key.length === 1 ? e.key : null;
+  if (ch === null) return;
+  e.preventDefault();
+  if (pos + wrong >= text.length) return;
+  if (!startTime) startTime = Date.now();
+  keystrokes++;
+  if (wrong === 0 && ch === text[pos]) {
+    pos++;
+    // auto-skip leading indentation after a correct newline
+    if (ch === "\n") while (text[pos] === " ") pos++;
+  } else {
+    wrong = Math.min(wrong + 1, text.length - pos);
+    errors++;
+  }
+  render();
+  updateStats(false);
+  if (pos >= text.length) {
+    updateStats(true);
+    toast("Done! ↻ New snippet for another round");
+  }
+});
+
+$("next").addEventListener("click", () => { pick(); el.focus(); });
+pick();
+</script>
+</body>
+</html>

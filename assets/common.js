@@ -30,6 +30,7 @@ const TOOLS = [
   { href: "types.html", label: "🏷️ JSON → Types" },
   { href: "number.html", label: "🔢 Number base" },
   { href: "escape.html", label: "\\ Escape" },
+  { href: "games.html", label: "🎮 Games" },
 ];
 
 (function injectSidebar() {
