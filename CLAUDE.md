@@ -25,6 +25,7 @@ There is nothing to build, install, or compile. "Run" = open the HTML file in a 
 - Everything runs in the browser; nothing leaves it. No network calls, no external CDNs, no analytics.
 - Escape all user-controlled input with `esc()` before inserting into `innerHTML` (this codebase has had XSS-hardening passes — keep it hardened).
 - Match the surrounding page's style: inline scripts, `"use strict"`, small pure helper functions, `localStorage` for persistence.
+- **When anything under `assets/` changes, bump the `CACHE` version in `sw.js`** — the service worker serves assets cache-first, so returning visitors never see asset changes otherwise.
 
 ## Commit workflow
 
