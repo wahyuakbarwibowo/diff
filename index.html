@@ -93,6 +93,7 @@
     white-space: nowrap;
   }
   .sidebar .brand span { color: var(--accent); }
+.sidebar .menu-toggle { display: none; }
   .sidebar nav { display: flex; flex-direction: column; gap: 2px; }
   .sidebar nav a {
     color: var(--muted);
@@ -304,12 +305,16 @@
       overflow: visible;
     }
     .sidebar .brand { flex: 1; padding: 0; }
+    /* Collapsed by default on mobile: brand row + ☰ toggle */
+    .sidebar .menu-toggle { display: block; font-size: 16px; padding: 4px 12px; line-height: 1; }
+    .sidebar nav, .sidebar .gh { display: none; }
     .sidebar nav {
       width: 100%;
-      display: grid;
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 6px;
     }
+    .sidebar.open nav { display: grid; }
+    .sidebar.open .gh { display: flex; }
     .sidebar nav a {
       border: 1px solid var(--border);
       overflow: hidden;
@@ -339,6 +344,7 @@
 
 <aside class="sidebar">
   <div class="brand">⚡ Dev<span>Tools</span></div>
+  <button class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">☰</button>
   <nav>
     <a href="index.html" class="active">⇄ Diff</a>
     <a href="url.html">🔗 URL</a>
@@ -1261,6 +1267,15 @@ for (const id of ["inputA", "inputB"]) {
 if ("serviceWorker" in navigator) {
   addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
+
+// ---------- Mobile sidebar toggle ----------
+(function initMenuToggle() {
+  const aside = document.querySelector(".sidebar");
+  const toggle = aside.querySelector(".menu-toggle");
+  toggle.addEventListener("click", () => {
+    toggle.setAttribute("aria-expanded", aside.classList.toggle("open"));
+  });
+})();
 
 // ---------- Command palette (Cmd/Ctrl+K) ----------
 (function initPalette() {

@@ -97,6 +97,7 @@ h1 span { color: var(--accent); }
   padding: 0 10px;
   white-space: nowrap;
 }
+.sidebar .menu-toggle { display: none; }
 .sidebar .brand span { color: var(--accent); }
 .sidebar nav { display: flex; flex-direction: column; gap: 2px; }
 .sidebar nav a {
@@ -257,12 +258,16 @@ table.kv td.section {
     overflow: visible;
   }
   .sidebar .brand { flex: 1; padding: 0; }
+  /* Collapsed by default on mobile: brand row + ☰ toggle */
+  .sidebar .menu-toggle { display: block; font-size: 16px; padding: 4px 12px; line-height: 1; }
+  .sidebar nav, .sidebar .gh { display: none; }
   .sidebar nav {
     width: 100%;
-    display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 6px;
   }
+  .sidebar.open nav { display: grid; }
+  .sidebar.open .gh { display: flex; }
   .sidebar nav a {
     border: 1px solid var(--border);
     overflow: hidden;

@@ -28,7 +28,9 @@
     background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
     padding: 18px; cursor: text; outline: none;
   }
-  #snippet:focus { border-color: var(--accent); }
+  #snippet.focused { border-color: var(--accent); }
+  /* offscreen-invisible textarea that owns focus, so phones show a keyboard */
+  #kbd { position: absolute; opacity: 0; width: 1px; height: 1px; padding: 0; border: none; }
   #snippet .done { color: var(--ok); }
   #snippet .bad { color: var(--bad); background: rgba(248,81,73,.18); border-radius: 2px; }
   #snippet .cur { border-left: 2px solid var(--accent); margin-left: -2px; animation: blink 1s step-end infinite; }
@@ -53,7 +55,8 @@
     <span>Accuracy: <b id="acc">–</b></span>
     <span>Best WPM: <b id="best">–</b></span>
   </div>
-  <div id="snippet" tabindex="0"></div>
+  <div id="snippet"></div>
+  <textarea id="kbd" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" aria-label="Type here"></textarea>
 </div>
 
 <p class="hint">Click the code and start typing — the timer starts on your first key · Enter for newlines, spaces for indentation · Backspace works</p>
@@ -149,18 +152,15 @@ function updateStats(final) {
   }
 }
 
-el.addEventListener("keydown", (e) => {
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.key === "Backspace") {
-    e.preventDefault();
-    if (wrong > 0) wrong--;
-    else if (pos > 0) pos--;
-    render();
-    return;
-  }
-  const ch = e.key === "Enter" ? "\n" : e.key.length === 1 ? e.key : null;
-  if (ch === null) return;
-  e.preventDefault();
+const kbd = $("kbd");
+
+function backspace() {
+  if (wrong > 0) wrong--;
+  else if (pos > 0) pos--;
+  render();
+}
+
+function handleChar(ch) {
   if (pos + wrong >= text.length) return;
   if (!startTime) startTime = Date.now();
   keystrokes++;
@@ -178,9 +178,30 @@ el.addEventListener("keydown", (e) => {
     updateStats(true);
     toast("Done! ↻ New snippet for another round");
   }
+}
+
+// desktop path: keydown gives us clean keys and we swallow them
+kbd.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === "Backspace") { e.preventDefault(); return backspace(); }
+  const ch = e.key === "Enter" ? "\n" : e.key.length === 1 ? e.key : null;
+  if (ch === null) return;
+  e.preventDefault();
+  handleChar(ch);
 });
 
-$("next").addEventListener("click", () => { pick(); el.focus(); });
+// mobile path: soft keyboards often skip real keydowns, so read what landed
+// ponytail: swipe-typing inserts whole words at once; per-word games need a diff
+kbd.addEventListener("input", () => {
+  for (const ch of kbd.value) handleChar(ch);
+  kbd.value = "";
+});
+
+kbd.addEventListener("focus", () => el.classList.add("focused"));
+kbd.addEventListener("blur", () => el.classList.remove("focused"));
+el.addEventListener("click", () => kbd.focus());
+
+$("next").addEventListener("click", () => { pick(); kbd.focus(); });
 pick();
 </script>
 </body>

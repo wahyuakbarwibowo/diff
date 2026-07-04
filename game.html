@@ -26,6 +26,7 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     max-width: 100%;
+    height: auto;
     touch-action: none;
   }
   .scores { display: flex; gap: 24px; font-family: var(--mono); color: var(--muted); }
@@ -201,7 +202,7 @@ board.addEventListener("touchend", (e) => {
 $("start").addEventListener("click", start);
 
 reset();
-draw("press any arrow key to start");
+draw("press an arrow key or tap to start");
 </script>
 </body>
 </html>

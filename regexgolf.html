@@ -32,6 +32,8 @@
   .word.oops { border-color: var(--bad); color: var(--bad); }
   .stats { font-family: var(--mono); color: var(--muted); }
   .stats b { color: var(--text); }
+  /* 16px stops iOS Safari from auto-zooming the regex field */
+  @media (max-width: 800px) { .golf-input input { font-size: 16px; } }
 </style>
 </head>
 <body>

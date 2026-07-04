@@ -54,6 +54,13 @@
   .tile[data-v="1024"] { background: #388bfd; color: #fff; font-size: 19px; }
   .tile[data-v="2048"] { background: #a371f7; color: #fff; font-size: 19px; }
   .tile[data-v="4096"] { background: #8957e5; color: #fff; font-size: 19px; }
+  @media (max-width: 480px) {
+    #grid { grid-template-columns: repeat(4, 64px); gap: 6px; padding: 6px; }
+    .cell, .tile { width: 64px; height: 64px; }
+    .tile { font-size: 22px; }
+    .tile[data-v="128"], .tile[data-v="256"], .tile[data-v="512"] { font-size: 18px; }
+    .tile[data-v="1024"], .tile[data-v="2048"], .tile[data-v="4096"] { font-size: 15px; }
+  }
 </style>
 </head>
 <body>
@@ -88,7 +95,9 @@ let best = +localStorage.getItem(BEST_KEY) || 0;
 const grid = $("grid");
 grid.innerHTML = Array.from({ length: 16 }, () => `<div class="cell"></div>`).join("");
 
-const px = (i) => ({ left: 8 + (i % 4) * 92, top: 8 + Math.floor(i / 4) * 92 });
+// tile targets come from the real layout, so CSS alone controls sizing
+const cellEls = [...grid.children];
+const px = (i) => ({ left: cellEls[i].offsetLeft, top: cellEls[i].offsetTop });
 
 function makeTile(v, i, pop) {
   const d = document.createElement("div");
@@ -210,6 +219,8 @@ grid.addEventListener("touchend", (e) => {
   if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
   move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
 });
+
+addEventListener("resize", () => { if (!animating) draw(); });
 
 $("restart").addEventListener("click", reset);
 reset();

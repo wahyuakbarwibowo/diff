@@ -38,6 +38,11 @@
   .n1 { color: var(--accent); } .n2 { color: var(--ok); } .n3 { color: var(--bad); }
   .n4 { color: #a371f7; } .n5 { color: var(--warn); } .n6 { color: #39c5cf; }
   .n7 { color: var(--text); } .n8 { color: var(--muted); }
+  @media (max-width: 430px) {
+    #grid { grid-template-columns: repeat(9, 32px); }
+    #grid button { width: 32px; height: 32px; font-size: 13px; }
+    .stats { gap: 14px; font-size: 13px; }
+  }
 </style>
 </head>
 <body>
