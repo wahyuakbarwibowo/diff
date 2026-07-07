@@ -4,24 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kalender Hijriah — Penanda Puasa Ayyamul Bidh</title>
-<meta name="description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (tanggal 13, 14, 15). Runs offline.">
+<meta name="description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (13, 14, 15) dan Senin-Kamis. Runs offline.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/hijri.html">
 <meta property="og:site_name" content="DevTools">
 <meta property="og:title" content="DevTools — Kalender Hijriah">
-<meta property="og:description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (tanggal 13, 14, 15).">
+<meta property="og:description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (13, 14, 15) dan Senin-Kamis.">
 <meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="DevTools — Kalender Hijriah">
-<meta name="twitter:description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (tanggal 13, 14, 15).">
+<meta name="twitter:description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (13, 14, 15) dan Senin-Kamis.">
 <meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
 <meta name="theme-color" content="#0d1117">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/common.css">
 <style>
-  #monthBar { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; }
-  #monthBar h2 { margin: 0; min-width: 260px; text-align: center; font-size: 1.2rem; }
+  #monthBar { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  #monthBar select, #monthBar input { font-size: 14px; font-weight: 600; text-align: center; }
+  #monthBar select#monthSelect { min-width: 150px; }
+  #monthBar input#yearInput { width: 80px; -moz-appearance: textfield; }
+  #monthBar input#yearInput::-webkit-outer-spin-button,
+  #monthBar input#yearInput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  #monthBar .h-suffix { font-weight: 600; opacity: 0.7; }
   .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
   .dow { text-align: center; font-size: 0.8rem; opacity: 0.6; padding: 4px 0; }
   .day { border-radius: 8px; padding: 8px 6px; min-height: 56px; text-align: center; background: var(--card-bg, rgba(127,127,127,0.08)); }
@@ -31,9 +37,33 @@
   .day.today { outline: 2px solid #4a9eff; }
   .day.bidh { background: #2e7d3222; }
   .day.bidh .h { color: #2e7d32; }
+  .day.senkam { background: #8a6d0022; }
+  .day.senkam .h { color: #a17d00; }
+  .day.bidh.senkam { background: linear-gradient(135deg, #2e7d3222, #8a6d0022); }
+  .day.syawal { box-shadow: inset 3px 0 0 #1565c0; }
+  .day.arafah { box-shadow: inset 3px 0 0 #c62828; }
+  .day.tasua, .day.asyura { box-shadow: inset 3px 0 0 #6a1b9a; }
   .day .badge { display: block; font-size: 0.65rem; margin-top: 2px; }
-  .legend { display: flex; gap: 16px; align-items: center; justify-content: center; margin-top: 14px; font-size: 0.85rem; opacity: 0.8; }
+  .legend { display: flex; gap: 16px; align-items: center; justify-content: center; margin-top: 14px; font-size: 0.85rem; opacity: 0.8; flex-wrap: wrap; }
   .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #2e7d32; margin-right: 6px; vertical-align: middle; }
+  .legend .dot.senkam { background: #a17d00; }
+  .legend .dot.syawal { background: #1565c0; }
+  .legend .dot.arafah { background: #c62828; }
+  .legend .dot.asyura { background: #6a1b9a; }
+  #shabanNote { text-align: center; font-size: 0.85rem; color: #a17d00; margin-top: 10px; }
+
+  @media (max-width: 480px) {
+    #monthBar { gap: 6px; }
+    #monthBar select#monthSelect { min-width: 0; flex: 1 1 110px; padding: 7px 6px; }
+    #monthBar input#yearInput { width: 60px; padding: 7px 6px; }
+    .grid { gap: 3px; }
+    .day { padding: 4px 2px; min-height: 42px; border-radius: 6px; }
+    .day .h { font-size: 0.9rem; }
+    .day .g { font-size: 0.6rem; }
+    .day .badge { font-size: 0; } /* keep icons legible, drop the "puasa" word */
+    .day .badge::before { content: attr(data-icons); font-size: 0.7rem; }
+    .legend { gap: 8px 12px; font-size: 0.75rem; }
+  }
 </style>
 </head>
 <body>
@@ -49,13 +79,29 @@
 
 <div class="card">
   <div id="monthBar">
-    <button id="prevBtn">&larr;</button>
-    <h2 id="monthTitle"></h2>
-    <button id="nextBtn">&rarr;</button>
+    <button id="prevBtn" title="Bulan sebelumnya">&larr;</button>
+    <select id="monthSelect"></select>
+    <input id="yearInput" class="text" type="number" step="1" inputmode="numeric">
+    <span class="h-suffix">H</span>
+    <button id="nextBtn" title="Bulan berikutnya">&rarr;</button>
   </div>
   <div class="grid" id="dowRow"></div>
   <div class="grid" id="grid" style="margin-top:6px"></div>
-  <div class="legend"><span><span class="dot"></span>Ayyamul Bidh (13, 14, 15 Hijriah) — puasa sunnah</span></div>
+  <p id="shabanNote" style="display:none">📿 Bulan Sya'ban — dianjurkan memperbanyak puasa sunnah, sebagaimana kebiasaan Rasulullah SAW.</p>
+  <div class="legend">
+    <span><span class="dot"></span>Ayyamul Bidh (13, 14, 15 Hijriah)</span>
+    <span><span class="dot senkam"></span>Senin &amp; Kamis</span>
+    <span><span class="dot syawal"></span>Syawal (2–7 Syawal, setelah Idulfitri)</span>
+    <span><span class="dot arafah"></span>Arafah (9 Dzulhijjah)</span>
+    <span><span class="dot asyura"></span>Tasu'a &amp; Asyura (9–10 Muharram)</span>
+  </div>
+</div>
+
+<div class="card">
+  <p class="hint" style="margin:0">
+    <strong>Puasa Daud</strong> — puasa selang-seling (sehari puasa, sehari tidak), puasa sunnah yang paling disukai Allah SWT.
+    Tidak terikat tanggal tertentu sehingga tidak ditandai di kalender ini.
+  </p>
 </div>
 
 <p class="hint">Konversi tanggal memakai kalender Hijriah bawaan browser (Umm al-Qura). Tanggal bisa berbeda 1 hari dari hasil rukyat lokal.</p>
@@ -94,14 +140,39 @@ function daysInMonth(first, month) {
   return hijriParts(d30).month === month ? 30 : 29;
 }
 
+function stepMonth(dir) {
+  const { first, month } = firstOfMonth(anchor);
+  if (dir > 0) {
+    const len = daysInMonth(first, month);
+    anchor = new Date(first);
+    anchor.setDate(anchor.getDate() + len);
+  } else {
+    anchor = new Date(first);
+    anchor.setDate(anchor.getDate() - 1); // last day of previous month
+  }
+}
+
+function goTo(targetYear, targetMonth) {
+  const { year, month } = firstOfMonth(anchor);
+  const diff = (targetYear * 12 + targetMonth) - (year * 12 + month);
+  const dir = diff > 0 ? 1 : -1;
+  for (let i = 0; i < Math.abs(diff); i++) stepMonth(dir);
+  render();
+}
+
+$("monthSelect").innerHTML = HIJRI_MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+
 function render() {
   const { first, year, month } = firstOfMonth(anchor);
   const len = daysInMonth(first, month);
   const todayKey = new Date().toDateString();
 
-  $("monthTitle").textContent = `${HIJRI_MONTHS[month - 1]} ${year} H`;
+  $("monthSelect").value = String(month);
+  $("yearInput").value = String(year);
 
   $("dowRow").innerHTML = DOW.map(d => `<div class="dow">${d}</div>`).join("");
+
+  $("shabanNote").style.display = month === 8 ? "" : "none";
 
   const leadBlanks = first.getDay();
   const cells = [];
@@ -110,32 +181,53 @@ function render() {
     const g = new Date(first);
     g.setDate(g.getDate() + (day - 1));
     const isBidh = day === 13 || day === 14 || day === 15;
+    const isSenKam = g.getDay() === 1 || g.getDay() === 4;
+    const isSyawal = month === 10 && day >= 2 && day <= 7;
+    const isArafah = month === 12 && day === 9;
+    const isTasua = month === 1 && day === 9;
+    const isAsyura = month === 1 && day === 10;
     const isToday = g.toDateString() === todayKey;
+
+    const icons = [];
+    if (isBidh) icons.push("🌙");
+    if (isSenKam) icons.push("📅");
+    if (isSyawal) icons.push("🎉");
+    if (isArafah) icons.push("⛰️");
+    if (isTasua || isAsyura) icons.push("🕌");
+    const iconStr = icons.join(" ");
+    const badge = icons.length ? `<span class="badge" data-icons="${iconStr}">${iconStr} puasa</span>` : "";
+
+    const cls = ["day"];
+    if (isBidh) cls.push("bidh");
+    if (isSenKam) cls.push("senkam");
+    if (isSyawal) cls.push("syawal");
+    if (isArafah) cls.push("arafah");
+    if (isTasua) cls.push("tasua");
+    if (isAsyura) cls.push("asyura");
+    if (isToday) cls.push("today");
+
     cells.push(
-      `<div class="day${isBidh ? " bidh" : ""}${isToday ? " today" : ""}">` +
+      `<div class="${cls.join(" ")}">` +
       `<div class="h">${day}</div>` +
       `<div class="g">${g.getDate()}/${g.getMonth() + 1}</div>` +
-      (isBidh ? `<span class="badge">🌙 puasa</span>` : "") +
+      badge +
       `</div>`
     );
   }
   $("grid").innerHTML = cells.join("");
 }
 
-$("prevBtn").addEventListener("click", () => {
-  const { first } = firstOfMonth(anchor);
-  anchor = new Date(first);
-  anchor.setDate(anchor.getDate() - 1); // last day of previous month
-  render();
-});
-$("nextBtn").addEventListener("click", () => {
-  const { first, month } = firstOfMonth(anchor);
-  const len = daysInMonth(first, month);
-  anchor = new Date(first);
-  anchor.setDate(anchor.getDate() + len); // first day of next month
-  render();
-});
+$("prevBtn").addEventListener("click", () => { stepMonth(-1); render(); });
+$("nextBtn").addEventListener("click", () => { stepMonth(1); render(); });
 $("todayBtn").addEventListener("click", () => { anchor = new Date(); render(); });
+$("monthSelect").addEventListener("change", () => {
+  const { year } = firstOfMonth(anchor);
+  goTo(year, +$("monthSelect").value);
+});
+$("yearInput").addEventListener("change", () => {
+  const { month } = firstOfMonth(anchor);
+  goTo(+$("yearInput").value, month);
+});
 
 render();
 </script>
