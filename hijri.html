@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalender Hijriah — Penanda Puasa Ayyamul Bidh</title>
+<meta name="description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (tanggal 13, 14, 15). Runs offline.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/hijri.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — Kalender Hijriah">
+<meta property="og:description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (tanggal 13, 14, 15).">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — Kalender Hijriah">
+<meta name="twitter:description" content="Kalender Hijriah offline dengan penanda otomatis puasa sunnah Ayyamul Bidh (tanggal 13, 14, 15).">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="stylesheet" href="assets/common.css">
+<style>
+  #monthBar { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; }
+  #monthBar h2 { margin: 0; min-width: 260px; text-align: center; font-size: 1.2rem; }
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .dow { text-align: center; font-size: 0.8rem; opacity: 0.6; padding: 4px 0; }
+  .day { border-radius: 8px; padding: 8px 6px; min-height: 56px; text-align: center; background: var(--card-bg, rgba(127,127,127,0.08)); }
+  .day.empty { background: transparent; }
+  .day .h { font-size: 1.1rem; font-weight: 600; }
+  .day .g { font-size: 0.7rem; opacity: 0.6; }
+  .day.today { outline: 2px solid #4a9eff; }
+  .day.bidh { background: #2e7d3222; }
+  .day.bidh .h { color: #2e7d32; }
+  .day .badge { display: block; font-size: 0.65rem; margin-top: 2px; }
+  .legend { display: flex; gap: 16px; align-items: center; justify-content: center; margin-top: 14px; font-size: 0.85rem; opacity: 0.8; }
+  .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #2e7d32; margin-right: 6px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>🌙 Hijri<span>Cal</span></h1>
+  <div class="controls">
+    <button id="theme" title="Theme: auto / light / dark">🌓</button>
+    <button id="todayBtn" class="primary">Hari ini</button>
+  </div>
+</header>
+
+<div class="card">
+  <div id="monthBar">
+    <button id="prevBtn">&larr;</button>
+    <h2 id="monthTitle"></h2>
+    <button id="nextBtn">&rarr;</button>
+  </div>
+  <div class="grid" id="dowRow"></div>
+  <div class="grid" id="grid" style="margin-top:6px"></div>
+  <div class="legend"><span><span class="dot"></span>Ayyamul Bidh (13, 14, 15 Hijriah) — puasa sunnah</span></div>
+</div>
+
+<p class="hint">Konversi tanggal memakai kalender Hijriah bawaan browser (Umm al-Qura). Tanggal bisa berbeda 1 hari dari hasil rukyat lokal.</p>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const HIJRI_MONTHS = [
+  "Muharram", "Safar", "Rabiul Awal", "Rabiul Akhir", "Jumadil Awal", "Jumadil Akhir",
+  "Rajab", "Syaban", "Ramadan", "Syawal", "Dzulkaidah", "Dzulhijjah",
+];
+const DOW = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+const hijriFmt = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", day: "numeric" });
+
+function hijriParts(date) {
+  const parts = hijriFmt.formatToParts(date);
+  const o = {};
+  for (const p of parts) o[p.type] = p.value;
+  return { year: +o.year, month: +o.month, day: +o.day };
+}
+
+// anchor: any Gregorian Date inside the Hijri month currently shown
+let anchor = new Date();
+
+function firstOfMonth(a) {
+  const p = hijriParts(a);
+  const first = new Date(a);
+  first.setDate(first.getDate() - (p.day - 1));
+  return { first, year: p.year, month: p.month };
+}
+
+function daysInMonth(first, month) {
+  const d30 = new Date(first);
+  d30.setDate(d30.getDate() + 29); // the 30th day, 0-indexed
+  return hijriParts(d30).month === month ? 30 : 29;
+}
+
+function render() {
+  const { first, year, month } = firstOfMonth(anchor);
+  const len = daysInMonth(first, month);
+  const todayKey = new Date().toDateString();
+
+  $("monthTitle").textContent = `${HIJRI_MONTHS[month - 1]} ${year} H`;
+
+  $("dowRow").innerHTML = DOW.map(d => `<div class="dow">${d}</div>`).join("");
+
+  const leadBlanks = first.getDay();
+  const cells = [];
+  for (let i = 0; i < leadBlanks; i++) cells.push(`<div class="day empty"></div>`);
+  for (let day = 1; day <= len; day++) {
+    const g = new Date(first);
+    g.setDate(g.getDate() + (day - 1));
+    const isBidh = day === 13 || day === 14 || day === 15;
+    const isToday = g.toDateString() === todayKey;
+    cells.push(
+      `<div class="day${isBidh ? " bidh" : ""}${isToday ? " today" : ""}">` +
+      `<div class="h">${day}</div>` +
+      `<div class="g">${g.getDate()}/${g.getMonth() + 1}</div>` +
+      (isBidh ? `<span class="badge">🌙 puasa</span>` : "") +
+      `</div>`
+    );
+  }
+  $("grid").innerHTML = cells.join("");
+}
+
+$("prevBtn").addEventListener("click", () => {
+  const { first } = firstOfMonth(anchor);
+  anchor = new Date(first);
+  anchor.setDate(anchor.getDate() - 1); // last day of previous month
+  render();
+});
+$("nextBtn").addEventListener("click", () => {
+  const { first, month } = firstOfMonth(anchor);
+  const len = daysInMonth(first, month);
+  anchor = new Date(first);
+  anchor.setDate(anchor.getDate() + len); // first day of next month
+  render();
+});
+$("todayBtn").addEventListener("click", () => { anchor = new Date(); render(); });
+
+render();
+</script>
+</body>
+</html>

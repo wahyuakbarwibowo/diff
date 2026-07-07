@@ -2,7 +2,7 @@
 // Bump CACHE to force clients to re-fetch everything after a deploy.
 "use strict";
 
-const CACHE = "devtools-v2";
+const CACHE = "devtools-v3";
 const CORE = ["./", "./index.html", "./assets/common.css", "./assets/common.js", "./assets/icon.svg"];
 
 self.addEventListener("install", (e) => {

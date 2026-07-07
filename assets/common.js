@@ -30,6 +30,7 @@ const TOOLS = [
   { href: "types.html", label: "🏷️ JSON → Types" },
   { href: "number.html", label: "🔢 Number base" },
   { href: "escape.html", label: "\\ Escape" },
+  { href: "hijri.html", label: "🌙 Hijri Calendar" },
   { href: "games.html", label: "🎮 Games" },
 ];
 
