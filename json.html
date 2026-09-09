@@ -57,7 +57,7 @@
       <span>Input JSON</span>
       <span class="status" id="statusIn"></span>
     </div>
-    <textarea id="input" placeholder="Paste JSON here… (trailing commas are tolerated)" spellcheck="false"></textarea>
+    <textarea id="input" placeholder="Paste JSON here… (messy JSON is repaired: comments, single quotes, unquoted keys, trailing/missing commas)" spellcheck="false"></textarea>
   </div>
   <div class="pane">
     <div class="pane-header">
@@ -84,13 +84,114 @@ function sortKeysDeep(value) {
   return value;
 }
 
+// Lenient recursive-descent parser: comments, single/unquoted keys, trailing or
+// missing commas, NaN/Infinity, Python True/False/None, leading/trailing junk.
+function parseJsonLenient(src) {
+  let i = 0;
+  const err = (m) => { throw new SyntaxError(m + " at position " + i); };
+  function ws() {
+    for (;;) {
+      while (i < src.length && /\s/.test(src[i])) i++;
+      if (src[i] === "/" && src[i + 1] === "/") { while (i < src.length && src[i] !== "\n") i++; continue; }
+      if (src[i] === "/" && src[i + 1] === "*") { i += 2; while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++; i += 2; continue; }
+      return;
+    }
+  }
+  function str(q) {
+    i++; let out = "";
+    while (i < src.length && src[i] !== q) {
+      if (src[i] === "\\") {
+        i++;
+        const c = src[i++];
+        if (c === "n") out += "\n";
+        else if (c === "t") out += "\t";
+        else if (c === "r") out += "\r";
+        else if (c === "b") out += "\b";
+        else if (c === "f") out += "\f";
+        else if (c === "u") { out += String.fromCharCode(parseInt(src.substr(i, 4), 16)); i += 4; }
+        else if (c === "\n") ; // line continuation
+        else out += c;
+      } else out += src[i++];
+    }
+    if (src[i] !== q) err("unterminated string");
+    i++;
+    return out;
+  }
+  function word() {
+    const start = i;
+    while (i < src.length && /[^\s:,{}\[\]"']/.test(src[i])) i++;
+    return src.slice(start, i);
+  }
+  function value() {
+    ws();
+    const c = src[i];
+    if (c === undefined) err("unexpected end of input");
+    if (c === "{") return obj();
+    if (c === "[") return arr();
+    if (c === '"' || c === "'") return str(c);
+    const w = word();
+    if (!w) err("unexpected character " + JSON.stringify(c));
+    if (w === "true" || w === "True") return true;
+    if (w === "false" || w === "False") return false;
+    if (w === "null" || w === "None" || w === "undefined") return null;
+    if (w === "NaN") return NaN;
+    if (w === "Infinity" || w === "+Infinity") return Infinity;
+    if (w === "-Infinity") return -Infinity;
+    const n = Number(w);
+    if (!Number.isNaN(n)) return n;
+    return w; // bare word -> string
+  }
+  function key() {
+    ws();
+    const c = src[i];
+    if (c === '"' || c === "'") return str(c);
+    const w = word();
+    if (!w) err("expected key");
+    return w;
+  }
+  function sep(close) {
+    ws();
+    if (src[i] === ",") { i++; ws(); return; }
+    if (src[i] === close || i >= src.length) return;
+    // missing comma — tolerate
+  }
+  function obj() {
+    i++; const o = {};
+    for (;;) {
+      ws();
+      if (src[i] === "}") { i++; return o; }
+      if (i >= src.length) err("unterminated object");
+      const k = key();
+      ws();
+      if (src[i] === ":" || src[i] === "=") i++;
+      o[k] = value();
+      sep("}");
+    }
+  }
+  function arr() {
+    i++; const a = [];
+    for (;;) {
+      ws();
+      if (src[i] === "]") { i++; return a; }
+      if (i >= src.length) err("unterminated array");
+      a.push(value());
+      sep("]");
+    }
+  }
+  ws();
+  // skip leading junk before the first { or [ when present
+  const brace = src.search(/[{[]/);
+  if (src[i] !== "{" && src[i] !== "[" && brace !== -1) i = brace;
+  const v = value();
+  return v;
+}
+
 function parseJsonLoose(text) {
   try {
     return { value: JSON.parse(text), note: "" };
   } catch (firstErr) {
     try {
-      const stripped = text.replace(/,\s*([}\]])/g, "$1");
-      return { value: JSON.parse(stripped), note: " (trailing commas fixed)" };
+      return { value: parseJsonLenient(text), note: " (repaired)" };
     } catch (e) {
       throw firstErr;
     }
