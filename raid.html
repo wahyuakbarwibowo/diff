@@ -4,20 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hideout Raid — retro FPS</title>
-<meta name="description" content="Retro raycaster FPS: storm the Null Pointer Gang's hideout across 3 missions and take back the production backup. Runs offline in your browser.">
+<meta name="description" content="Retro raycaster FPS: play as a cop, raid the Null Pointer Gang's hideouts and survive highway chases against gun-toting bikers across 7 stages. Runs offline in your browser.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/raid.html">
 <meta property="og:site_name" content="DevTools">
 <meta property="og:title" content="DevTools — Hideout Raid">
-<meta property="og:description" content="Retro raycaster FPS: storm the gangster hideout, 3 missions, one boss.">
+<meta property="og:description" content="Retro FPS: raid hideouts, survive highway bike chases, take down the boss. 7 stages.">
 <meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="DevTools — Hideout Raid">
-<meta name="twitter:description" content="Retro raycaster FPS, offline in your browser.">
+<meta name="twitter:description" content="Retro raycaster FPS with car chases, offline in your browser.">
 <meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
 <meta name="theme-color" content="#0d1117">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/common.css">
 <style>
   .wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -37,19 +38,19 @@
   <h1>🔫 Hideout<span>Raid</span></h1>
   <div class="controls">
     <button id="theme" title="Theme: auto / light / dark">🌓</button>
-    <button id="restart" class="primary">↻ Retry mission</button>
+    <button id="restart" class="primary">↻ Retry stage</button>
   </div>
 </header>
 
 <div class="card wrap">
   <div class="stats">
-    <span>Mission: <b id="mission">1</b>/3</span>
+    <span>Stage: <b id="mission">1</b>/7</span>
     <span>Best run: <b id="best">–</b></span>
   </div>
   <canvas id="board" width="480" height="320"></canvas>
 </div>
 
-<p class="hint">Desktop: WASD move · mouse or ←/→ to look · click/space to shoot · Mobile: drag left half to move, drag right half to look, tap right half to shoot</p>
+<p class="hint">On foot — WASD move, mouse or ←/→ look, click/space shoot · In the cruiser — A/D or ←/→ steer, click/tap the bikers to shoot · Mobile: drag to move/steer, tap to shoot</p>
 <div id="toast"></div>
 
 <script>
@@ -58,10 +59,11 @@
 const W = 480, H = 320, FOV = Math.PI / 3, COLS = W / 2, BEST_KEY = "raid-best";
 const board = $("board"), ctx = board.getContext("2d");
 
-const MISSIONS = [
+const STAGES = [
   {
-    name: "Mission 1 — The Warehouse",
-    story: "For months the Null Pointer Gang has terrorized the city's startups — stealing laptops, leaking databases, force-pushing to master. Last night they hit YOUR office and took the only backup of production. Your informant traced the crates to a warehouse by the docks. Get in, take out every guard, and find the trail to their headquarters.",
+    type: "raid",
+    name: "Stage 1 — The Warehouse",
+    story: "Detective, this is dispatch. The Null Pointer Gang hit three data centers this month, and tonight they grabbed the only production backup of half the city's startups. A warrant just cleared. Their fence runs the operation from a warehouse on Pier 7 — go in, neutralize every armed guard, and find where the drive went. Watch the corners.",
     grid: [
       "################",
       "#P.....#.......#",
@@ -73,12 +75,19 @@ const MISSIONS = [
       "#..######.###..#",
       "#......#.......#",
       "#..E...#.......#",
-      "################",
+      "##########D#####",
     ],
   },
   {
-    name: "Mission 2 — The Office Floor",
-    story: "The backup wasn't in the warehouse — but a shipping manifest was. It points to the gang's front company, 'NullPtr Consulting', on the 4th floor of an abandoned office tower. The lights are still on. The syndicate's lieutenants are up there guarding the elevator to the boss's vault. Clear the whole floor — nobody calls for backup tonight.",
+    type: "drive",
+    name: "Stage 2 — Highway Ambush",
+    story: "A shipping manifest in the warehouse points to NullPtr Consulting's tower across town. You take the cruiser. As you hit the expressway, dispatch crackles: the gang's outriders picked up your plates. Armed bikers, closing fast. Steer through traffic, shoot them off your tail, and whatever happens — don't stop driving.",
+    dist: 900, rate: 2.4,
+  },
+  {
+    type: "raid",
+    name: "Stage 3 — The Office Tower",
+    story: "4th floor, NullPtr Consulting — the gang's front company in an abandoned office tower. The lights are still on and the elevator to the boss's vault is guarded by the syndicate's lieutenants. SWAT is twenty minutes out; the backup drive might not last that long. Clear the floor, Detective. Nobody calls for reinforcements tonight.",
     grid: [
       "################",
       "#P....#....E...#",
@@ -92,14 +101,47 @@ const MISSIONS = [
       "#.#.....#.##.#.#",
       "#.#.E...#..E.#.#",
       "#.#.....#....#.#",
-      "################",
+      "###########D####",
     ],
   },
   {
-    name: "Mission 3 — The Vault",
-    story: "This is it. Behind the vault door sits Big O himself — the boss whose crimes always scale with input size. The production drive is on his desk, and his best enforcers stand between you and it. Take down the bodyguards, take down Big O, and take back production. Deploy some justice.",
+    type: "drive",
+    name: "Stage 4 — Waterfront Run",
+    story: "A lieutenant talked: Big O is moving the drive tonight in a convoy down the waterfront expressway. Every bike the gang has left is riding escort, and their spotters are posted in the towers along the road. It's a straight run. Punch it, keep your aim steady, and don't lose that convoy.",
+    dist: 1100, rate: 1.9,
+  },
+  {
+    type: "raid",
+    name: "Stage 5 — The Container Depot",
+    story: "The convoy stopped at the gang's container depot by the harbor — a maze of stacked steel and narrow lanes. The drive switched trucks here, and the crew that guarded the handoff is still inside, waiting for the all-clear. Sweep the depot, find the manifest for the new truck, and make sure nobody radios ahead.",
     grid: [
       "################",
+      "#P...#....#....#",
+      "#.##.#.E..#.##.#",
+      "#.#..#....#.#..#",
+      "#.#.E##.###.#.E#",
+      "#.#.........#..#",
+      "#.###.#####.##.#",
+      "#...E.#...#....#",
+      "###.###.E.###.##",
+      "#...#......#..E#",
+      "#.E.#..##..#...#",
+      "#..............#",
+      "#######D########",
+    ],
+  },
+  {
+    type: "drive",
+    name: "Stage 6 — Airport Expressway",
+    story: "The manifest spells it out: Big O's vault sits under his private hangar off the airport expressway, and he's planning to fly out with the drive before sunrise. He knows how close you are now — the last of his riders and every window shooter he can still pay are strung along this road. One more run, Detective. Floor it.",
+    dist: 1300, rate: 1.6,
+  },
+  {
+    type: "raid",
+    name: "Stage 7 — The Vault",
+    story: "This is it. Behind the vault door sits Big O himself — the boss whose crimes always scale with input size. The production drive is on his desk, and his best enforcers stand between you and it. You're not waiting for SWAT. Take down the bodyguards, take down Big O, and take back production. Deploy some justice, Detective.",
+    grid: [
+      "########D#######",
       "#P.............#",
       "#..##......##..#",
       "#..#..E..E..#..#",
@@ -116,42 +158,238 @@ const MISSIONS = [
   },
 ];
 
-const EPILOGUE = "Production restored. The Null Pointer Gang is dereferenced, and Big O has been reduced to constant time — behind bars. The city's developers can deploy on Fridays again. (They still shouldn't.)";
+const EPILOGUE = "Case closed. Production restored, the Null Pointer Gang dereferenced, and Big O reduced to constant time — behind bars. The commissioner says take the weekend off. The city's developers can deploy on Fridays again. (They still shouldn't.)";
 
-let map, mission, state, player, enemies, hurt, gun, gunCd, playTime;
+let stage, map, mission, state, player, enemies, doors, hurt, gun, gunCd, playTime;
+// drive-mode state
+let progress, bikers, spawnCd, playerX, aim, kills, snipers, deadSnipers;
 // state: "story" | "play" | "dead" | "won"
 let best = +localStorage.getItem(BEST_KEY) || 0;
 $("best").textContent = best ? best + "s" : "–";
 
 const keys = {};
-let joy = null; // active left-half touch: {id, x0, y0, x, y}
+let joy = null; // active left-half touch on foot: {id, x0, y0, x, y}
+
+// --- pixel-art sprites (all procedural, no external assets) ---
+const SPRITE_ROWS = [
+  "...jjjjjj...",
+  "...jjjjjj...",
+  ".jjjjjjjjjj.",
+  "...ssssss...",
+  "...qqssqq...",
+  "...ssssss...",
+  "....ssss....",
+  "..kkkkkkkk..",
+  ".kkkwwwwkkkg",
+  ".kkkwttwkkks",
+  "skkkwttwkkks",
+  "skkkwwwwkkks",
+  ".kkkkkkkkkk.",
+];
+// two-frame walk cycle: legs together / legs apart
+const LEG_FRAMES = [
+  [
+    "..kkk..kkk..",
+    "..kkk..kkk..",
+    "..kkk..kkk..",
+    "..bbb..bbb..",
+  ],
+  [
+    ".kkk....kkk.",
+    ".kkk....kkk.",
+    ".kkk....kkk.",
+    ".bbb....bbb.",
+  ],
+];
+const THUG_PAL = { j: "#2a2a32", q: "#101014", s: "#e0b08a", k: "#23252d", w: "#e8e8e8", t: "#b3232e", b: "#101014", g: "#3a3a40" };
+const BOSS_PAL = { j: "#e8e0c8", q: "#101014", s: "#e0b08a", k: "#dcd6c6", w: "#1c1c22", t: "#d4a017", b: "#3a2c18", g: "#3a3a40" };
+
+// first-person pistol: back of the slide, two hands on the grip
+const GUN_ROWS = [
+  "......gggg......",
+  "......gggg......",
+  ".....gGGGGg.....",
+  ".....gGGGGg.....",
+  ".....gGGGGg.....",
+  ".....gGGGGg.....",
+  "....sggggggs....",
+  "...ssgbbbbgss...",
+  "..ssssbbbbssss..",
+  ".sssssbbbbsssss.",
+  ".kssssssssssssk.",
+  "kkksssssssssskkk",
+  "kkkkssssssskkkkk",
+];
+const GUN_PAL = { g: "#33343c", G: "#4b4d58", b: "#6b4a2f", s: "#e0b08a", k: "#23252d" };
+
+// police cruiser, rear view
+const CAR_ROWS = [
+  ".......rrruuu.......",
+  "......kkkkkkkk......",
+  ".....kggggggggk.....",
+  "....pkggggggggkp....",
+  "...ppkkkkkkkkkkpp...",
+  "..pppppppppppppppp..",
+  "..pkkkkkkkkkkkkkkp..",
+  "..pppppppppppppppp..",
+  ".rppppppppppppppppr.",
+  ".tttppppppppppppttt.",
+  ".ttt.kkkkkkkkkk.ttt.",
+];
+const CAR_PAL = { r: "#ff3b30", u: "#3b6bff", k: "#14161c", g: "#2a3140", p: "#e8eaf0", t: "#101014" };
+
+// gangster on a motorbike, coming at you
+const BIKER_ROWS = [
+  "....hhhh....",
+  "....hqqh....",
+  "...kkkkkk...",
+  "..skkkkkks..",
+  "..mmkkkkmm..",
+  "....kkkk....",
+  "....mmmm....",
+  "....tttt....",
+  "....tttt....",
+  "....tttt....",
+];
+const BIKER_PAL = { h: "#3a3f4c", q: "#0e0f14", k: "#2b2d36", s: "#e0b08a", m: "#7a7f8a", t: "#15161a" };
+
+function makeSprite(rows, pal) {
+  const c = document.createElement("canvas");
+  c.width = rows[0].length; c.height = rows.length;
+  const g = c.getContext("2d");
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); }
+  }));
+  return c;
+}
+const thugSprites = LEG_FRAMES.map(legs => makeSprite(SPRITE_ROWS.concat(legs), THUG_PAL));
+const bossSprites = LEG_FRAMES.map(legs => makeSprite(SPRITE_ROWS.concat(legs), BOSS_PAL));
+const gunSprite = makeSprite(GUN_ROWS, GUN_PAL);
+const carSprite = makeSprite(CAR_ROWS, CAR_PAL);
+const bikerSprite = makeSprite(BIKER_ROWS, BIKER_PAL);
+
+// high-rise wall texture: concrete floors with lit and dark windows
+const wallTex = (() => {
+  const c = document.createElement("canvas");
+  c.width = 64; c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "#4c4640";
+  g.fillRect(0, 0, 64, 64);
+  for (let y = 5; y < 60; y += 14)
+    for (let x = 4; x < 60; x += 12) {
+      g.fillStyle = Math.random() < .3 ? "#d8a845" : "#1c2028";
+      g.fillRect(x, y, 7, 9);
+    }
+  g.fillStyle = "rgba(0,0,0,.3)";
+  for (let y = 0; y < 64; y += 14) g.fillRect(0, y, 64, 2);
+  return c;
+})();
+
+// distant city skyline strip (wraps horizontally for parallax)
+const skyline = (() => {
+  const c = document.createElement("canvas");
+  c.width = 960; c.height = 70;
+  const g = c.getContext("2d");
+  let x = 0;
+  while (x < 960) {
+    const w = 24 + Math.random() * 40, h = 18 + Math.random() * 50;
+    g.fillStyle = "#141a2e";
+    g.fillRect(x, 70 - h, w, h);
+    g.fillStyle = "rgba(216,168,69,.5)";
+    for (let wy = 70 - h + 4; wy < 66; wy += 8)
+      for (let wx = x + 3; wx < x + w - 4; wx += 8)
+        if (Math.random() < .25) g.fillRect(wx, wy, 3, 4);
+    x += w + 4 + Math.random() * 14;
+  }
+  return c;
+})();
+
+// human-scale interior wall: painted panels, wainscot, skirting board
+const interiorTex = (() => {
+  const c = document.createElement("canvas");
+  c.width = 64; c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "#4a443e"; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = "#3c3733"; g.fillRect(0, 42, 64, 22);
+  g.fillStyle = "#2b2723"; g.fillRect(0, 60, 64, 4);
+  g.fillStyle = "rgba(0,0,0,.25)";
+  for (const x of [0, 16, 32, 48]) g.fillRect(x, 0, 1, 42);
+  g.fillRect(0, 42, 64, 1);
+  g.fillStyle = "#33302c"; g.fillRect(24, 10, 16, 8); // vent
+  g.fillStyle = "rgba(0,0,0,.4)";
+  for (let y = 12; y < 18; y += 2) g.fillRect(25, y, 14, 1);
+  return c;
+})();
+
+// steel exit door with an EXIT sign
+const doorTex = (() => {
+  const c = document.createElement("canvas");
+  c.width = 64; c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "#2a2d34"; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = "#4a4e58"; g.fillRect(8, 6, 48, 58);
+  g.fillStyle = "#3a3e48"; g.fillRect(13, 12, 38, 20); g.fillRect(13, 38, 38, 20);
+  g.fillStyle = "#c9d1d9"; g.fillRect(44, 33, 8, 4);
+  g.fillStyle = "#3fb950"; g.fillRect(22, 0, 20, 5);
+  return c;
+})();
+
+function hash(k) { const x = Math.sin(k * 127.1) * 43758.5; return x - Math.floor(x); }
+
+// --- shared ---
 
 function isWall(x, y) {
   const c = (map[y | 0] || "")[x | 0];
-  return c === undefined || c === "#";
+  return c === undefined || c === "#" || c === "D";
 }
 
 function blocked(x, y) {
   return isWall(x - .2, y - .2) || isWall(x + .2, y - .2) || isWall(x - .2, y + .2) || isWall(x + .2, y + .2);
 }
 
-function loadMission(i) {
+function loadStage(i) {
   mission = i;
-  map = MISSIONS[i].grid;
-  enemies = [];
-  for (let y = 0; y < map.length; y++)
-    for (let x = 0; x < map[y].length; x++) {
-      const c = map[y][x];
-      if (c === "P") player = { x: x + .5, y: y + .5, a: 0, hp: 100 };
-      if (c === "E") enemies.push({ x: x + .5, y: y + .5, hp: 2, cd: 1 + Math.random(), flash: 0, boss: false });
-      if (c === "B") enemies.push({ x: x + .5, y: y + .5, hp: 6, cd: 1.5, flash: 0, boss: true });
-    }
-  hurt = 0; gun = 0; gunCd = 0; joy = null;
-  state = "story";
+  stage = STAGES[i];
   $("mission").textContent = i + 1;
+  hurt = 0; gun = 0; gunCd = 0; joy = null;
+  player = { x: 0, y: 0, a: 0, hp: 100 };
+  if (stage.type === "raid") {
+    map = stage.grid;
+    enemies = []; doors = [];
+    for (let y = 0; y < map.length; y++)
+      for (let x = 0; x < map[y].length; x++) {
+        const c = map[y][x];
+        if (c === "P") { player.x = x + .5; player.y = y + .5; }
+        if (c === "D") doors.push({ x: x + .5, y: y + .5 });
+        if (c === "E") enemies.push({ x: x + .5, y: y + .5, hp: 2, cd: 1 + Math.random(), flash: 0, walk: 0, boss: false });
+        if (c === "B") enemies.push({ x: x + .5, y: y + .5, hp: 6, cd: 1.5, flash: 0, walk: 0, boss: true });
+      }
+  } else {
+    progress = 0; bikers = []; spawnCd = 1.2; playerX = 0; kills = 0;
+    snipers = {}; deadSnipers = new Set();
+    aim = { x: W / 2, y: H / 2 };
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+  state = "story";
 }
 
-// DDA raycast, returns perpendicular-ish distance to nearest wall
+function stageClear() {
+  if (mission + 1 < STAGES.length) loadStage(mission + 1);
+  else {
+    state = "won";
+    const secs = Math.round(playTime);
+    if (!best || secs < best) {
+      best = secs;
+      localStorage.setItem(BEST_KEY, best);
+      $("best").textContent = best + "s";
+      toast("New best run! 🏆");
+    }
+  }
+}
+
+// --- raid mode: raycaster ---
+
+// DDA raycast; wallX is the fractional hit position for texturing
 function cast(px, py, ang) {
   const dx = Math.cos(ang), dy = Math.sin(ang);
   let mx = px | 0, my = py | 0;
@@ -162,9 +400,14 @@ function cast(px, py, ang) {
   if (dy < 0) { sy = -1; sdy = (py - my) * ddy; } else { sy = 1; sdy = (my + 1 - py) * ddy; }
   for (let i = 0; i < 64; i++) {
     if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
-    if (isWall(mx + .5, my + .5)) return { dist: side ? sdy - ddy : sdx - ddx, side };
+    const ch = (map[my] || "")[mx];
+    if (ch === undefined || ch === "#" || ch === "D") {
+      const dist = side ? sdy - ddy : sdx - ddx;
+      const w = side ? px + dist * dx : py + dist * dy;
+      return { dist, side, wallX: w - Math.floor(w), door: ch === "D" };
+    }
   }
-  return { dist: 64, side: 0 };
+  return { dist: 64, side: 0, wallX: 0, door: false };
 }
 
 function los(from, tx, ty) {
@@ -187,23 +430,8 @@ function shoot() {
     target.hp--; target.flash = .15;
     if (target.hp <= 0) {
       enemies.splice(enemies.indexOf(target), 1);
-      toast(target.boss ? "Big O is down! 😎💥" : "Guard down (" + enemies.length + " left)");
-    }
-  }
-  if (!enemies.length) missionClear();
-}
-
-function missionClear() {
-  if (mission + 1 < MISSIONS.length) {
-    loadMission(mission + 1);
-  } else {
-    state = "won";
-    const secs = Math.round(playTime);
-    if (!best || secs < best) {
-      best = secs;
-      localStorage.setItem(BEST_KEY, best);
-      $("best").textContent = best + "s";
-      toast("New best run! 🏆");
+      toast(!enemies.length ? "All clear — get to the exit door 🚪"
+        : target.boss ? "Big O is down! 😎💥" : "Suspect down (" + enemies.length + " left)");
     }
   }
 }
@@ -227,6 +455,10 @@ function update(dt) {
   if (!blocked(nx, player.y)) player.x = nx;
   if (!blocked(player.x, ny)) player.y = ny;
 
+  // floor cleared: walk up to the exit door to move on
+  if (!enemies.length && doors.some(d => Math.hypot(player.x - d.x, player.y - d.y) < 1.1))
+    return stageClear();
+
   for (const e of enemies) {
     e.flash -= dt; e.cd -= dt;
     const d = Math.hypot(player.x - e.x, player.y - e.y);
@@ -237,6 +469,9 @@ function update(dt) {
       const ey = e.y + (player.y - e.y) / d * esp;
       if (!blocked(ex, e.y)) e.x = ex;
       if (!blocked(e.x, ey)) e.y = ey;
+      e.walk += dt;
+    } else {
+      e.walk = 0; // standing: legs together
     }
     if (seen && d < 8 && e.cd <= 0) {
       e.cd = e.boss ? 1.0 : 1.5;
@@ -249,79 +484,42 @@ function update(dt) {
   }
 }
 
-// pixel-art gangster sprites, drawn once to offscreen canvases (no external assets)
-const SPRITE_ROWS = [
-  "...jjjjjj...",
-  "...jjjjjj...",
-  ".jjjjjjjjjj.",
-  "...ssssss...",
-  "...qqssqq...",
-  "...ssssss...",
-  "....ssss....",
-  "..kkkkkkkk..",
-  ".kkkwwwwkkkg",
-  ".kkkwttwkkks",
-  "skkkwttwkkks",
-  "skkkwwwwkkks",
-  ".kkkkkkkkkk.",
-  "..kkk..kkk..",
-  "..kkk..kkk..",
-  "..kkk..kkk..",
-  "..bbb..bbb..",
-];
-const THUG_PAL = { j: "#2a2a32", q: "#101014", s: "#e0b08a", k: "#23252d", w: "#e8e8e8", t: "#b3232e", b: "#101014", g: "#3a3a40" };
-const BOSS_PAL = { j: "#e8e0c8", q: "#101014", s: "#e0b08a", k: "#dcd6c6", w: "#1c1c22", t: "#d4a017", b: "#3a2c18", g: "#3a3a40" };
-
-// first-person pistol: back of the slide, two hands on the grip
-const GUN_ROWS = [
-  "......gggg......",
-  "......gggg......",
-  ".....gGGGGg.....",
-  ".....gGGGGg.....",
-  ".....gGGGGg.....",
-  ".....gGGGGg.....",
-  "....sggggggs....",
-  "...ssgbbbbgss...",
-  "..ssssbbbbssss..",
-  ".sssssbbbbsssss.",
-  ".kssssssssssssk.",
-  "kkksssssssssskkk",
-  "kkkkssssssskkkkk",
-];
-const GUN_PAL = { g: "#33343c", G: "#4b4d58", b: "#6b4a2f", s: "#e0b08a", k: "#23252d" };
-
-function makeSprite(rows, pal) {
-  const c = document.createElement("canvas");
-  c.width = rows[0].length; c.height = rows.length;
-  const g = c.getContext("2d");
-  rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); }
-  }));
-  return c;
-}
-const thugSprite = makeSprite(SPRITE_ROWS, THUG_PAL);
-const bossSprite = makeSprite(SPRITE_ROWS, BOSS_PAL);
-const gunSprite = makeSprite(GUN_ROWS, GUN_PAL);
-
 const zbuf = new Array(COLS);
 
+function drawSky(parallax) {
+  const sg = ctx.createLinearGradient(0, 0, 0, H / 2);
+  sg.addColorStop(0, "#0b1026");
+  sg.addColorStop(1, "#25304e");
+  ctx.fillStyle = sg;
+  ctx.fillRect(0, 0, W, H / 2);
+  const off = ((parallax % 960) + 960) % 960;
+  ctx.drawImage(skyline, off, 0, Math.min(960 - off, W), 70, 0, H / 2 - 70, Math.min(960 - off, W), 70);
+  if (960 - off < W) ctx.drawImage(skyline, 0, 0, W - (960 - off), 70, 960 - off, H / 2 - 70, W - (960 - off), 70);
+}
+
 function render() {
-  // ceiling & floor
-  ctx.fillStyle = "#171a21"; ctx.fillRect(0, 0, W, H / 2);
-  ctx.fillStyle = "#2b2620"; ctx.fillRect(0, H / 2, W, H / 2);
-  // walls
+  drawSky(player.a / (Math.PI * 2) * 960);
+  ctx.fillStyle = "#26221d";
+  ctx.fillRect(0, H / 2, W, H / 2);
+  // textured walls
+  ctx.imageSmoothingEnabled = false;
   for (let c = 0; c < COLS; c++) {
     const ang = player.a + (c / COLS - .5) * FOV;
     const r = cast(player.x, player.y, ang);
     const d = Math.max(.05, r.dist * Math.cos(ang - player.a)); // fisheye fix
     zbuf[c] = d;
-    const h = Math.min(H, H / d);
-    const sh = Math.max(0, 1 - d / 12) * (r.side ? .72 : 1);
-    ctx.fillStyle = `rgb(${100 * sh + 18 | 0},${55 * sh + 14 | 0},${45 * sh + 14 | 0})`;
-    ctx.fillRect(c * 2, (H - h) / 2, 2, h);
+    const h = Math.min(2400, H / d);
+    const y = (H - h) / 2;
+    ctx.drawImage(r.door ? doorTex : interiorTex, r.wallX * 64 | 0, 0, 1, 64, c * 2, y, 2, h);
+    const dark = 1 - Math.max(0, 1 - d / 12) * (r.side ? .72 : 1);
+    ctx.fillStyle = `rgba(5,7,12,${(dark * .85).toFixed(3)})`;
+    ctx.fillRect(c * 2, Math.max(0, y), 2, Math.min(H, h));
+    if (r.door && !enemies.length) { // unlocked: green glow
+      ctx.fillStyle = "rgba(63,185,80,.28)";
+      ctx.fillRect(c * 2, Math.max(0, y), 2, Math.min(H, h));
+    }
   }
   // enemies, far to near
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
   const sorted = [...enemies].sort((a, b) =>
     Math.hypot(b.x - player.x, b.y - player.y) - Math.hypot(a.x - player.x, a.y - player.y));
   for (const e of sorted) {
@@ -333,11 +531,10 @@ function render() {
     const col = Math.max(0, Math.min(COLS - 1, sx / 2 | 0));
     if (zbuf[col] < d - .25) continue; // ponytail: occlusion tested at sprite center column only
     const wallH = H / d;
-    const sh = Math.min(360, wallH * (e.boss ? .95 : .72));
-    const sp = e.boss ? bossSprite : thugSprite;
+    const sh = Math.min(360, wallH * (e.boss ? .8 : .62)); // people well below the ceiling line
+    const sp = (e.boss ? bossSprites : thugSprites)[Math.floor(e.walk * 5) % 2];
     const sw = sh * sp.width / sp.height;
     const top = H / 2 + Math.min(H, wallH) / 2 - sh; // feet on the floor line
-    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(sp, sx - sw / 2, top, sw, sh);
     if (e.flash > 0) {
       ctx.fillStyle = "rgba(255,70,70,.45)";
@@ -360,14 +557,183 @@ function render() {
     ctx.fillStyle = "rgba(255,230,120,.95)";
     ctx.beginPath(); ctx.arc(W / 2, gy - 4, 9, 0, Math.PI * 2); ctx.fill();
   }
-  ctx.imageSmoothingEnabled = false;
   ctx.drawImage(gunSprite, W / 2 - gw / 2, gy, gw, gh);
-  // hurt overlay
-  if (hurt > 0) {
-    ctx.fillStyle = `rgba(200,0,0,${hurt * .9})`;
-    ctx.fillRect(0, 0, W, H);
+  drawHud(stage.name + " · " + (enemies.length ? enemies.length + " hostiles" : "find the exit door 🚪"));
+}
+
+// --- drive mode: pseudo-3D highway chase ---
+
+const HOR = 134; // horizon line
+const GAP = 22; // meters between roadside buildings
+function dproj(z, x) {
+  const s = 2.4 / (z + 2.4);
+  return { s, y: HOR + (H - 30 - HOR) * s, x: W / 2 + x * 200 * s };
+}
+function buildingAt(k) {
+  const z = k * GAP - progress;
+  const side = k % 2 ? 1 : -1;
+  const p = dproj(z, side * (2.7 + hash(k) * 1.6));
+  const bw = 240 * p.s * (.8 + hash(k * 3) * .6);
+  const bh = (180 + hash(k * 7) * 300) * p.s * 6; // proper high-rise: many times taller than a person
+  return { z, side, p, bw, bh };
+}
+function hasSniper(k) { return hash(k * 13) < .3; }
+function sniperPoint(k) { // a low-floor window on the road-facing edge (stays on screen)
+  const b = buildingAt(k);
+  return { x: b.p.x - b.side * b.bw * .3, y: b.p.y - 200 * b.p.s, s: b.p.s, z: b.z };
+}
+
+function shootAt(px, py) {
+  if (state !== "play" || gunCd > 0) return;
+  gunCd = .25; gun = .1;
+  aim = { x: px, y: py };
+  let hit = null, hd = 1e9;
+  for (const b of bikers) {
+    const p = dproj(b.z, b.x);
+    const r = 14 + 120 * p.s;
+    if (Math.hypot(px - p.x, py - (p.y - 55 * p.s)) < r && b.z < hd) { hd = b.z; hit = b; }
   }
-  // HUD
+  let hitK = -1;
+  const base = Math.floor(progress / GAP);
+  for (let n = 1; n <= 16; n++) {
+    const k = base + n;
+    if (!hasSniper(k) || deadSnipers.has(k)) continue;
+    const pt = sniperPoint(k);
+    if (pt.z > 40) continue;
+    if (Math.hypot(px - pt.x, py - pt.y) < 10 + 60 * pt.s && pt.z < hd) { hd = pt.z; hit = null; hitK = k; }
+  }
+  if (hitK >= 0) { deadSnipers.add(hitK); kills++; }
+  else if (hit) { bikers.splice(bikers.indexOf(hit), 1); kills++; }
+}
+
+function updateDrive(dt) {
+  playTime += dt;
+  gunCd -= dt; gun -= dt; hurt -= dt;
+  const steer = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+  playerX = Math.max(-1.35, Math.min(1.35, playerX + steer * 2.2 * dt));
+  progress += 28 * dt;
+  if (progress >= stage.dist) return stageClear();
+
+  spawnCd -= dt;
+  if (spawnCd <= 0) {
+    spawnCd = stage.rate;
+    bikers.push({ z: 50, x: Math.random() * 2.4 - 1.2, hold: 5 + Math.random() * 7, cd: 1 + Math.random(), flash: 0 });
+  }
+  for (const b of bikers) {
+    b.flash -= dt; b.cd -= dt;
+    if (b.z > b.hold) b.z -= 9 * dt; // closing in
+    b.x += (playerX - b.x) * .4 * dt + Math.sin(playTime * 2 + b.hold) * .15 * dt;
+    if (b.z <= b.hold + 4 && b.cd <= 0) {
+      b.cd = 1.3 + Math.random();
+      b.flash = .15;
+      if (Math.random() < .4) {
+        player.hp -= 8;
+        hurt = .35;
+        if (player.hp <= 0) { player.hp = 0; state = "dead"; }
+      }
+    }
+  }
+  // window snipers on passing buildings
+  const base = Math.floor(progress / GAP);
+  for (let n = 1; n <= 16; n++) {
+    const k = base + n;
+    if (!hasSniper(k) || deadSnipers.has(k)) continue;
+    const z = k * GAP - progress;
+    if (z > 30 || z < 3) continue;
+    const s = snipers[k] || (snipers[k] = { cd: 1 + Math.random() * 1.5, flash: 0 });
+    s.flash -= dt; s.cd -= dt;
+    if (s.cd <= 0) {
+      s.cd = 1.7 + Math.random();
+      s.flash = .15;
+      if (Math.random() < .35) {
+        player.hp -= 6;
+        hurt = .35;
+        if (player.hp <= 0) { player.hp = 0; state = "dead"; }
+      }
+    }
+  }
+}
+
+function renderDrive() {
+  drawSky(playerX * -40);
+  // shoulder / ground
+  ctx.fillStyle = "#1e2126";
+  ctx.fillRect(0, HOR, W, H - HOR);
+  // roadside high-rises, far to near
+  ctx.imageSmoothingEnabled = false;
+  for (let n = 16; n >= 1; n--) {
+    const k = Math.floor(progress / GAP) + n;
+    const b = buildingAt(k);
+    ctx.drawImage(wallTex, b.p.x - b.bw / 2, b.p.y - b.bh, b.bw, b.bh);
+    ctx.fillStyle = `rgba(5,7,12,${(Math.min(.85, b.z / 60)).toFixed(3)})`;
+    ctx.fillRect(b.p.x - b.bw / 2, b.p.y - b.bh, b.bw, b.bh);
+    // gangster at a window, taking potshots at your cruiser
+    if (hasSniper(k) && !deadSnipers.has(k) && b.z < 40) {
+      const pt = sniperPoint(k);
+      const th = 55 * pt.s, tw = th * thugSprites[0].width / thugSprites[0].height; // window-sized human
+      ctx.drawImage(thugSprites[0], pt.x - tw / 2, pt.y - th / 2, tw, th);
+      const sn = snipers[k];
+      if (sn && sn.flash > 0) {
+        ctx.fillStyle = "rgba(255,230,120,.95)";
+        ctx.beginPath(); ctx.arc(pt.x + b.side * -tw * .4, pt.y, 2 + 6 * pt.s, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+  // road
+  const nl = dproj(0, -1.6), nr = dproj(0, 1.6), fl = dproj(90, -1.6), fr = dproj(90, 1.6);
+  ctx.fillStyle = "#33363d";
+  ctx.beginPath();
+  ctx.moveTo(nl.x, H); ctx.lineTo(nr.x, H); ctx.lineTo(fr.x, fr.y); ctx.lineTo(fl.x, fl.y);
+  ctx.closePath(); ctx.fill();
+  // edge lines + center dashes
+  for (const ex of [-1.45, 1.45]) {
+    const a = dproj(.1, ex), b = dproj(90, ex);
+    ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(a.x, H); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  for (let k = 0; k < 24; k++) {
+    const z = k * 4 - progress % 4;
+    if (z < .3) continue;
+    const a = dproj(z, 0), b2 = dproj(z + 1.8, 0);
+    ctx.fillStyle = "rgba(230,220,140,.75)";
+    ctx.fillRect(a.x - 3 * a.s, b2.y, 6 * a.s, a.y - b2.y);
+  }
+  // bikers, far to near
+  for (const b of [...bikers].sort((p1, p2) => p2.z - p1.z)) {
+    const p = dproj(b.z, b.x);
+    const bh = 115 * p.s, bw = bh * bikerSprite.width / bikerSprite.height; // rider ~ car-roof height
+    ctx.drawImage(bikerSprite, p.x - bw / 2, p.y - bh, bw, bh);
+    if (b.flash > 0) { // muzzle flash at their gun hand
+      ctx.fillStyle = "rgba(255,230,120,.95)";
+      ctx.beginPath(); ctx.arc(p.x - bw * .4, p.y - bh * .65, 4 + 8 * p.s, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // police cruiser + siren glow
+  const cs = 6, cw = carSprite.width * cs, ch = carSprite.height * cs;
+  const cx = W / 2 + playerX * 150 - cw / 2, cy = H - ch - 8;
+  const sirenBlue = Math.floor(playTime * 4) % 2 === 0;
+  ctx.fillStyle = sirenBlue ? "rgba(60,110,255,.35)" : "rgba(255,60,50,.35)";
+  ctx.beginPath(); ctx.arc(cx + cw / 2, cy + 6, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.drawImage(carSprite, cx, cy, cw, ch);
+  // your muzzle flash from the window
+  if (gun > 0) {
+    ctx.fillStyle = "rgba(255,230,120,.95)";
+    ctx.beginPath(); ctx.arc(cx + 6, cy + 20, 10, 0, Math.PI * 2); ctx.fill();
+  }
+  // crosshair at aim point
+  ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(aim.x - 8, aim.y); ctx.lineTo(aim.x + 8, aim.y);
+  ctx.moveTo(aim.x, aim.y - 8); ctx.lineTo(aim.x, aim.y + 8);
+  ctx.stroke();
+  ctx.beginPath(); ctx.arc(aim.x, aim.y, 5, 0, Math.PI * 2); ctx.stroke();
+  // progress bar to destination
+  ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(10, 24, W - 20, 6);
+  ctx.fillStyle = "#58a6ff"; ctx.fillRect(10, 24, (W - 20) * progress / stage.dist, 6);
+  drawHud(stage.name + " · " + kills + " gangsters down");
+}
+
+function drawHud(label) {
   ctx.fillStyle = "rgba(0,0,0,.5)";
   ctx.fillRect(8, H - 26, 130, 18);
   ctx.fillStyle = player.hp > 40 ? "#3fb950" : "#f85149";
@@ -375,9 +741,12 @@ function render() {
   ctx.fillStyle = "#fff";
   ctx.font = "12px monospace";
   ctx.textAlign = "left";
-  ctx.fillText("HP " + player.hp, 14, H - 17);
-  ctx.fillText(MISSIONS[mission].name + " · " + enemies.length + " hostiles", 10, 16);
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("HP " + player.hp, 14, H - 13);
+  ctx.fillText(label, 10, 16);
 }
+
+// --- screens & loop ---
 
 function wrapText(text, x, y, maxW, lh) {
   const words = text.split(" ");
@@ -397,23 +766,31 @@ function drawScreen(title, body, footer) {
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillStyle = "#e6b840";
   ctx.font = "bold 20px monospace";
-  ctx.fillText(title, W / 2, 46);
+  ctx.fillText(title, W / 2, 40);
   ctx.fillStyle = "#c9d1d9";
   ctx.font = "13px monospace";
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-  wrapText(body, 36, 86, W - 72, 20);
+  wrapText(body, 36, 76, W - 72, 19);
   ctx.textAlign = "center";
   ctx.fillStyle = "#8b949e";
   ctx.fillText(footer, W / 2, H - 26);
 }
 
+const DEAD_TEXT = {
+  raid: "The gang got you. Production is still hostage — but the stairwell is still clear. Patch yourself up and take the floor again, Detective.",
+  drive: "Your cruiser is wrecked on the shoulder. Dispatch sends a tow and a spare — get back on the road, they're getting away.",
+};
+
 function frame(now) {
   const dt = Math.min(.05, (now - (frame.last || now)) / 1000);
   frame.last = now;
-  if (state === "play") { update(dt); render(); }
-  else if (state === "story") drawScreen(MISSIONS[mission].name, MISSIONS[mission].story, "click or press Enter to start");
-  else if (state === "dead") drawScreen("MISSION FAILED 💀", "The gang got you. Production is still hostage — but the elevator is still running. Patch yourself up and try the floor again.", "click or press Enter to retry");
-  else if (state === "won") drawScreen("HIDEOUT CLEARED 🏆", EPILOGUE + " Run time: " + Math.round(playTime) + "s.", "click or press Enter for a new run");
+  if (state === "play") {
+    if (stage.type === "drive") updateDrive(dt); else update(dt);
+    if (state === "play") { if (stage.type === "drive") renderDrive(); else render(); }
+  }
+  if (state === "story") drawScreen(stage.name, stage.story, "click or press Enter to start");
+  else if (state === "dead") drawScreen("MISSION FAILED 💀", DEAD_TEXT[stage.type], "click or press Enter to retry");
+  else if (state === "won") drawScreen("CASE CLOSED 🏆", EPILOGUE + " Run time: " + Math.round(playTime) + "s.", "click or press Enter for a new run");
   requestAnimationFrame(frame);
 }
 
@@ -422,10 +799,16 @@ function advance() {
     if (mission === 0) playTime = 0;
     state = "play";
   } else if (state === "dead") {
-    loadMission(mission);
+    loadStage(mission);
   } else if (state === "won") {
-    loadMission(0);
+    loadStage(0);
   }
+}
+
+function canvasPoint(e) {
+  const rect = board.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  return { x: (p.clientX - rect.left) * (W / rect.width), y: (p.clientY - rect.top) * (H / rect.height) };
 }
 
 // --- input ---
@@ -433,19 +816,31 @@ addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
   if (k === "enter" && state !== "play") return advance();
-  if (k === " ") { if (state === "play") shoot(); else advance(); return; }
+  if (k === " ") {
+    if (state !== "play") return advance();
+    if (stage.type === "drive") {
+      // space: auto-aim the nearest rider
+      let n = null;
+      for (const b of bikers) if (!n || b.z < n.z) n = b;
+      if (n) { const p = dproj(n.z, n.x); shootAt(p.x, p.y - 55 * p.s); }
+    } else shoot();
+    return;
+  }
   keys[k] = true;
 });
 addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
 
-board.addEventListener("click", () => {
+board.addEventListener("click", (e) => {
   if (state !== "play") return advance();
+  if (stage.type === "drive") return shootAt(canvasPoint(e).x, canvasPoint(e).y);
   if (document.pointerLockElement !== board && matchMedia("(pointer: fine)").matches)
     board.requestPointerLock();
   shoot();
 });
 addEventListener("mousemove", (e) => {
-  if (document.pointerLockElement === board && state === "play") player.a += e.movementX * .0032;
+  if (state !== "play") return;
+  if (stage.type === "drive") { aim = canvasPoint(e); return; }
+  if (document.pointerLockElement === board) player.a += e.movementX * .0032;
 });
 
 const touches = {};
@@ -456,7 +851,7 @@ board.addEventListener("touchstart", (e) => {
   for (const t of e.changedTouches) {
     const left = t.clientX - rect.left < rect.width / 2;
     touches[t.identifier] = { x: t.clientX, y: t.clientY, t0: performance.now(), moved: 0, left };
-    if (left) joy = { id: t.identifier, x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY };
+    if (stage.type === "raid" && left) joy = { id: t.identifier, x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY };
   }
 });
 board.addEventListener("touchmove", (e) => {
@@ -465,24 +860,32 @@ board.addEventListener("touchmove", (e) => {
     const tr = touches[t.identifier];
     if (!tr) continue;
     tr.moved += Math.abs(t.clientX - tr.x) + Math.abs(t.clientY - tr.y);
-    if (tr.left && joy && joy.id === t.identifier) { joy.x = t.clientX; joy.y = t.clientY; }
+    if (state === "play" && stage.type === "drive") {
+      playerX = Math.max(-1.35, Math.min(1.35, playerX + (t.clientX - tr.x) * .008));
+    } else if (tr.left && joy && joy.id === t.identifier) { joy.x = t.clientX; joy.y = t.clientY; }
     else if (!tr.left && state === "play") player.a += (t.clientX - tr.x) * .008;
     tr.x = t.clientX; tr.y = t.clientY;
   }
 });
 board.addEventListener("touchend", (e) => {
+  const rect = board.getBoundingClientRect();
   for (const t of e.changedTouches) {
     const tr = touches[t.identifier];
     if (!tr) continue;
-    if (!tr.left && tr.moved < 12 && performance.now() - tr.t0 < 350) shoot();
+    const tap = tr.moved < 12 && performance.now() - tr.t0 < 350;
+    if (tap && state === "play") {
+      if (stage.type === "drive")
+        shootAt((t.clientX - rect.left) * (W / rect.width), (t.clientY - rect.top) * (H / rect.height));
+      else if (!tr.left) shoot();
+    }
     if (joy && joy.id === t.identifier) joy = null;
     delete touches[t.identifier];
   }
 });
 
-$("restart").addEventListener("click", () => loadMission(mission));
+$("restart").addEventListener("click", () => loadStage(mission));
 
-loadMission(0);
+loadStage(0);
 requestAnimationFrame(frame);
 </script>
 </body>
