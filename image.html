@@ -20,6 +20,42 @@
 <meta name="theme-color" content="#0d1117">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/common.css">
+<style>
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.12); overflow: hidden; }
+  .panel-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .panel-head .ico { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-size: 16px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); flex: none; }
+  .panel-head h2 { font-size: 15px; font-weight: 600; line-height: 1.2; }
+  .panel-head p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .panel-body { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+  .drop { border: 1.5px dashed var(--border); border-radius: 8px; padding: 22px 16px; text-align: center; cursor: pointer;
+    color: var(--muted); font-size: 13px; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--text); }
+  .drop b { color: var(--accent); font-weight: 600; }
+  .drop .big { font-size: 22px; display: block; margin-bottom: 6px; }
+  .drop input { display: none; }
+  .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .field label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .field select, .field input[type=number] { width: 100%; height: 34px; }
+  .field input[type=color] { width: 100%; height: 34px; padding: 3px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; }
+  .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .actions .status { margin-left: auto; }
+  details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); user-select: none; }
+  details textarea { margin-top: 8px; min-height: 120px; }
+  .preview { min-height: 140px; border: 1px solid var(--border); border-radius: 8px; display: grid; place-items: center; padding: 12px;
+    background: repeating-conic-gradient(#8882 0 25%, transparent 0 50%) 0 0/16px 16px; }
+  .preview.empty { color: var(--muted); font-size: 13px; background: var(--bg); }
+  .preview img { max-width: 100%; max-height: 360px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font-family: var(--mono); }
+  .chip b { color: var(--text); font-weight: 600; }
+  #svgOut { min-height: 150px; font-size: 12px; }
+  .note { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 8px;
+    background: color-mix(in srgb, var(--warn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--border)); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } .fields { grid-template-columns: 1fr 1fr; } }
+</style>
 </head>
 <body>
 <script src="assets/common.js"></script>
@@ -29,33 +65,62 @@
   <div class="controls"><button id="theme" title="Theme: auto / light / dark">🌓</button></div>
 </header>
 
-<div class="card">
-  <h3>SVG → PNG / JPG</h3>
-  <div class="options">
-    <input type="file" id="svgFile" accept=".svg,image/svg+xml">
-    <select id="fmt"><option value="image/png">PNG</option><option value="image/jpeg">JPG / JPEG</option></select>
-    <label class="checkbox">Scale <input type="number" id="scale" value="1" min="0.1" max="16" step="0.5" style="width:70px"></label>
-    <label class="checkbox">Background <input type="color" id="bg" value="#ffffff"></label>
-    <button id="toRaster" class="primary">Convert</button>
-    <button id="dlRaster" disabled>⬇ Download</button>
-    <span class="status" id="statusR"></span>
-  </div>
-  <textarea id="svgText" placeholder="…or paste SVG markup here" spellcheck="false" style="min-height:140px"></textarea>
-  <div id="rasterOut" style="margin-top:12px"></div>
+<div class="grid">
+  <section class="panel">
+    <div class="panel-head">
+      <div class="ico">◧</div>
+      <div><h2>SVG → PNG / JPG</h2><p>Rasterize vector graphics at any scale</p></div>
+    </div>
+    <div class="panel-body">
+      <label class="drop" id="dropSvg">
+        <span class="big">⬆</span><b>Choose an SVG</b> or drop it here
+        <input type="file" id="svgFile" accept=".svg,image/svg+xml">
+      </label>
+      <details>
+        <summary>Or paste SVG markup</summary>
+        <textarea id="svgText" placeholder="&lt;svg …&gt;" spellcheck="false"></textarea>
+      </details>
+      <div class="fields">
+        <div class="field"><label for="fmt">Format</label>
+          <select id="fmt"><option value="image/png">PNG</option><option value="image/jpeg">JPG / JPEG</option></select></div>
+        <div class="field"><label for="scale">Scale</label>
+          <input type="number" id="scale" value="1" min="0.1" max="16" step="0.5"></div>
+        <div class="field"><label for="bg">JPG background</label>
+          <input type="color" id="bg" value="#ffffff"></div>
+      </div>
+      <div class="actions">
+        <button id="toRaster" class="primary">Convert</button>
+        <button id="dlRaster" disabled>⬇ Download</button>
+        <span class="status" id="statusR"></span>
+      </div>
+      <div class="preview empty" id="rasterOut">Preview appears here</div>
+      <div class="chips" id="rasterMeta"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div class="ico">◨</div>
+      <div><h2>PNG / JPG → SVG</h2><p>Embed a bitmap inside an SVG container</p></div>
+    </div>
+    <div class="panel-body">
+      <label class="drop" id="dropImg">
+        <span class="big">⬆</span><b>Choose an image</b> or drop it here
+        <input type="file" id="imgFile" accept="image/*">
+      </label>
+      <div class="preview empty" id="imgPrev">Preview appears here</div>
+      <div class="actions">
+        <button id="dlSvg" class="primary" disabled>⬇ Download SVG</button>
+        <button id="copySvg" disabled>📋 Copy markup</button>
+        <span class="status" id="statusS"></span>
+      </div>
+      <textarea id="svgOut" placeholder="SVG output appears here…" spellcheck="false" readonly></textarea>
+      <div class="note"><span>ⓘ</span><span>The bitmap is embedded as base64 — this wraps the image, it does not trace or vectorize it.</span></div>
+    </div>
+  </section>
 </div>
 
-<div class="card">
-  <h3>PNG / JPG → SVG</h3>
-  <div class="options">
-    <input type="file" id="imgFile" accept="image/*">
-    <button id="dlSvg" disabled>⬇ Download SVG</button>
-    <button id="copySvg" disabled>📋 Copy</button>
-    <span class="status" id="statusS"></span>
-  </div>
-  <textarea id="svgOut" placeholder="SVG output appears here…" spellcheck="false" readonly style="min-height:140px"></textarea>
-  <p class="hint">Wraps the bitmap in an SVG container (embedded as base64) — it does not trace/vectorize the image.</p>
-</div>
-
+<p class="hint">Runs entirely in your browser — files are never uploaded</p>
 <div id="toast"></div>
 
 <script>
@@ -66,6 +131,10 @@ let rasterUrl = null, rasterName = "image", svgName = "image";
 function download(href, name) {
   const a = document.createElement("a");
   a.href = href; a.download = name; a.click();
+}
+
+function chips(el, pairs) {
+  el.innerHTML = pairs.map(([k, v]) => `<span class="chip">${esc(k)} <b>${esc(v)}</b></span>`).join("");
 }
 
 // Intrinsic size: width/height attrs, else viewBox, else 300x150.
@@ -101,10 +170,12 @@ function toRaster() {
       if (rasterUrl) URL.revokeObjectURL(rasterUrl);
       rasterUrl = URL.createObjectURL(b);
       const ext = type === "image/png" ? "png" : "jpg";
-      $("rasterOut").innerHTML = `<img src="${rasterUrl}" style="max-width:100%;background:repeating-conic-gradient(#8884 0 25%,transparent 0 50%) 0 0/16px 16px">`;
+      $("rasterOut").className = "preview";
+      $("rasterOut").innerHTML = `<img src="${rasterUrl}" alt="Converted image">`;
       $("dlRaster").disabled = false;
       $("dlRaster").dataset.name = rasterName + "." + ext;
-      setStatus($("statusR"), `${c.width}×${c.height} · ${(b.size / 1024).toFixed(1)} KB`, "ok");
+      chips($("rasterMeta"), [["size", `${c.width}×${c.height}`], ["type", ext.toUpperCase()], ["file", `${(b.size / 1024).toFixed(1)} KB`]]);
+      setStatus($("statusR"), "Converted", "ok");
     }, type, 0.92);
   };
   img.onerror = () => { URL.revokeObjectURL(src); setStatus($("statusR"), "Could not render SVG", "err"); };
@@ -119,16 +190,14 @@ function readFile(file, as) {
   });
 }
 
-$("svgFile").addEventListener("change", async (e) => {
-  const f = e.target.files[0];
+async function loadSvg(f) {
   if (!f) return;
   rasterName = f.name.replace(/\.[^.]+$/, "") || "image";
   $("svgText").value = await readFile(f, "text");
   toRaster();
-});
+}
 
-$("imgFile").addEventListener("change", async (e) => {
-  const f = e.target.files[0];
+async function loadImage(f) {
   setStatus($("statusS"), "");
   if (!f) return;
   svgName = f.name.replace(/\.[^.]+$/, "") || "image";
@@ -137,12 +206,24 @@ $("imgFile").addEventListener("change", async (e) => {
   img.onload = () => {
     const w = img.naturalWidth, h = img.naturalHeight;
     $("svgOut").value = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n  <image width="${w}" height="${h}" xlink:href="${url}" href="${url}"/>\n</svg>\n`;
+    $("imgPrev").className = "preview";
+    $("imgPrev").innerHTML = `<img src="${url}" alt="Source image">`;
     $("dlSvg").disabled = $("copySvg").disabled = false;
     setStatus($("statusS"), `${w}×${h}`, "ok");
   };
   img.onerror = () => setStatus($("statusS"), "Not a valid image", "err");
   img.src = url;
-});
+}
+
+// Click-to-pick is native (label wraps the input); add drag & drop on top.
+function wireDrop(zone, input, handler) {
+  input.addEventListener("change", () => handler(input.files[0]));
+  ["dragenter", "dragover"].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove("over"); }));
+  zone.addEventListener("drop", e => handler(e.dataTransfer.files[0]));
+}
+wireDrop($("dropSvg"), $("svgFile"), loadSvg);
+wireDrop($("dropImg"), $("imgFile"), loadImage);
 
 $("toRaster").addEventListener("click", toRaster);
 $("dlRaster").addEventListener("click", () => download(rasterUrl, $("dlRaster").dataset.name));
