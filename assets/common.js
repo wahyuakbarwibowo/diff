@@ -25,6 +25,7 @@ const TOOLS = [
   { href: "fake.html", label: "🎲 Fake data" },
   { href: "case.html", label: "Aa Text case" },
   { href: "qr.html", label: "▦ QR code" },
+  { href: "image.html", label: "🖼️ Image convert" },
   { href: "html.html", label: "🌐 HTML preview" },
   { href: "handlebars.html", label: "{{ }} Handlebars" },
   { href: "types.html", label: "🏷️ JSON → Types" },
