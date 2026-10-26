@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Converter — SVG ⇄ PNG / JPG</title>
+<meta name="description" content="Convert SVG to PNG or JPG and PNG/JPG back to SVG. Runs offline in your browser, nothing is uploaded.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://wahyuakbarwibowo.github.io/diff/image.html">
+<meta property="og:site_name" content="DevTools">
+<meta property="og:title" content="DevTools — SVG ⇄ PNG/JPG Converter">
+<meta property="og:description" content="Convert SVG to PNG or JPG and PNG/JPG back to SVG. Runs offline in your browser, nothing is uploaded.">
+<meta property="og:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DevTools — SVG ⇄ PNG/JPG Converter">
+<meta name="twitter:description" content="Convert SVG to PNG or JPG and PNG/JPG back to SVG. Runs offline in your browser, nothing is uploaded.">
+<meta name="twitter:image" content="https://wahyuakbarwibowo.github.io/diff/assets/og.png">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/common.css">
+</head>
+<body>
+<script src="assets/common.js"></script>
+
+<header>
+  <h1>🖼️ Image<span>Converter</span></h1>
+  <div class="controls"><button id="theme" title="Theme: auto / light / dark">🌓</button></div>
+</header>
+
+<div class="card">
+  <h3>SVG → PNG / JPG</h3>
+  <div class="options">
+    <input type="file" id="svgFile" accept=".svg,image/svg+xml">
+    <select id="fmt"><option value="image/png">PNG</option><option value="image/jpeg">JPG / JPEG</option></select>
+    <label class="checkbox">Scale <input type="number" id="scale" value="1" min="0.1" max="16" step="0.5" style="width:70px"></label>
+    <label class="checkbox">Background <input type="color" id="bg" value="#ffffff"></label>
+    <button id="toRaster" class="primary">Convert</button>
+    <button id="dlRaster" disabled>⬇ Download</button>
+    <span class="status" id="statusR"></span>
+  </div>
+  <textarea id="svgText" placeholder="…or paste SVG markup here" spellcheck="false" style="min-height:140px"></textarea>
+  <div id="rasterOut" style="margin-top:12px"></div>
+</div>
+
+<div class="card">
+  <h3>PNG / JPG → SVG</h3>
+  <div class="options">
+    <input type="file" id="imgFile" accept="image/*">
+    <button id="dlSvg" disabled>⬇ Download SVG</button>
+    <button id="copySvg" disabled>📋 Copy</button>
+    <span class="status" id="statusS"></span>
+  </div>
+  <textarea id="svgOut" placeholder="SVG output appears here…" spellcheck="false" readonly style="min-height:140px"></textarea>
+  <p class="hint">Wraps the bitmap in an SVG container (embedded as base64) — it does not trace/vectorize the image.</p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+let rasterUrl = null, rasterName = "image", svgName = "image";
+
+function download(href, name) {
+  const a = document.createElement("a");
+  a.href = href; a.download = name; a.click();
+}
+
+// Intrinsic size: width/height attrs, else viewBox, else 300x150.
+function svgSize(text) {
+  const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+  const el = doc.documentElement;
+  if (el.nodeName !== "svg" || doc.querySelector("parsererror")) throw new Error("Invalid SVG");
+  let w = parseFloat(el.getAttribute("width")), h = parseFloat(el.getAttribute("height"));
+  const vb = (el.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+  if (!(w > 0) || !(h > 0)) { [w, h] = vb.length === 4 && vb[2] > 0 && vb[3] > 0 ? [vb[2], vb[3]] : [300, 150]; }
+  return [w, h];
+}
+
+function toRaster() {
+  const text = $("svgText").value.trim();
+  setStatus($("statusR"), "");
+  if (!text) return setStatus($("statusR"), "Provide an SVG first", "err");
+  let w, h;
+  try { [w, h] = svgSize(text); } catch (e) { return setStatus($("statusR"), e.message, "err"); }
+  const s = Math.min(16, Math.max(0.1, +$("scale").value || 1));
+  const type = $("fmt").value;
+  const src = URL.createObjectURL(new Blob([text], { type: "image/svg+xml" }));
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = Math.round(w * s); c.height = Math.round(h * s);
+    const g = c.getContext("2d");
+    if (type === "image/jpeg") { g.fillStyle = $("bg").value; g.fillRect(0, 0, c.width, c.height); }
+    g.drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(src);
+    c.toBlob(b => {
+      if (!b) return setStatus($("statusR"), "Canvas too large", "err");
+      if (rasterUrl) URL.revokeObjectURL(rasterUrl);
+      rasterUrl = URL.createObjectURL(b);
+      const ext = type === "image/png" ? "png" : "jpg";
+      $("rasterOut").innerHTML = `<img src="${rasterUrl}" style="max-width:100%;background:repeating-conic-gradient(#8884 0 25%,transparent 0 50%) 0 0/16px 16px">`;
+      $("dlRaster").disabled = false;
+      $("dlRaster").dataset.name = rasterName + "." + ext;
+      setStatus($("statusR"), `${c.width}×${c.height} · ${(b.size / 1024).toFixed(1)} KB`, "ok");
+    }, type, 0.92);
+  };
+  img.onerror = () => { URL.revokeObjectURL(src); setStatus($("statusR"), "Could not render SVG", "err"); };
+  img.src = src;
+}
+
+function readFile(file, as) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result); r.onerror = () => rej(r.error);
+    as === "text" ? r.readAsText(file) : r.readAsDataURL(file);
+  });
+}
+
+$("svgFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  rasterName = f.name.replace(/\.[^.]+$/, "") || "image";
+  $("svgText").value = await readFile(f, "text");
+  toRaster();
+});
+
+$("imgFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  setStatus($("statusS"), "");
+  if (!f) return;
+  svgName = f.name.replace(/\.[^.]+$/, "") || "image";
+  const url = await readFile(f, "url");
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    $("svgOut").value = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n  <image width="${w}" height="${h}" xlink:href="${url}" href="${url}"/>\n</svg>\n`;
+    $("dlSvg").disabled = $("copySvg").disabled = false;
+    setStatus($("statusS"), `${w}×${h}`, "ok");
+  };
+  img.onerror = () => setStatus($("statusS"), "Not a valid image", "err");
+  img.src = url;
+});
+
+$("toRaster").addEventListener("click", toRaster);
+$("dlRaster").addEventListener("click", () => download(rasterUrl, $("dlRaster").dataset.name));
+$("dlSvg").addEventListener("click", () => {
+  const u = URL.createObjectURL(new Blob([$("svgOut").value], { type: "image/svg+xml" }));
+  download(u, svgName + ".svg");
+  setTimeout(() => URL.revokeObjectURL(u), 1000);
+});
+$("copySvg").addEventListener("click", () => copyText($("svgOut").value, "SVG copied to clipboard"));
+</script>
+</body>
+</html>
