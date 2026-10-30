@@ -104,8 +104,20 @@
     border-radius: 6px;
     white-space: nowrap;
   }
-  .sidebar nav a:hover { color: var(--accent); background: var(--bg); }
-  .sidebar nav a.active { color: var(--text); background: var(--bg); font-weight: 600; }
+  .sidebar nav { gap: 1px; }
+.sidebar nav .group {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: .75;
+  padding: 14px 10px 5px;
+}
+.sidebar nav .group:first-child { padding-top: 0; }
+.sidebar nav a { border-left: 2px solid transparent; border-radius: 0 6px 6px 0; }
+.sidebar nav a:hover { color: var(--accent); background: var(--bg); }
+  .sidebar nav a.active { color: var(--text); background: var(--bg); font-weight: 600; border-left-color: var(--accent); }
   .sidebar .gh {
     margin-top: auto;
     display: flex;
@@ -321,7 +333,10 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .sidebar nav a.active { border-color: var(--accent); }
+    .sidebar nav .group { grid-column: 1 / -1; padding: 8px 2px 0; }
+  .sidebar nav .group:first-child { padding-top: 0; }
+  .sidebar nav a { border-left-width: 1px; border-radius: 6px; }
+  .sidebar nav a.active { border-color: var(--accent); }
     .sidebar .gh { margin: 0; border-top: none; padding: 0 2px; }
     /* Even-width control rows instead of ragged wrapping */
     .controls, .options { gap: 6px; }
@@ -347,27 +362,33 @@
   <div class="brand">⚡ Dev<span>Tools</span></div>
   <button class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">☰</button>
   <nav>
+    <div class="group">Compare &amp; format</div>
     <a href="index.html" class="active">⇄ Diff</a>
-    <a href="url.html">🔗 URL</a>
-    <a href="base64.html">📦 Base64</a>
-    <a href="jwt.html">🎫 JWT</a>
-    <a href="timestamp.html">🕐 Timestamp</a>
     <a href="json.html">{} JSON</a>
-    <a href="hash.html"># Hash</a>
-    <a href="uuid.html">🆔 UUID / ULID</a>
-    <a href="regex.html">.* Regex</a>
-    <a href="cron.html">⏰ Cron</a>
-    <a href="color.html">🎨 Color</a>
-    <a href="fake.html">🎲 Fake data</a>
-    <a href="case.html">Aa Text case</a>
-    <a href="qr.html">▦ QR code</a>
-    <a href="image.html">🖼️ Image convert</a>
+    <a href="types.html">🏷️ JSON → Types</a>
     <a href="html.html">🌐 HTML preview</a>
     <a href="handlebars.html">{{ }} Handlebars</a>
-    <a href="types.html">🏷️ JSON → Types</a>
-    <a href="number.html">🔢 Number base</a>
+    <a href="regex.html">.* Regex</a>
+    <div class="group">Encode &amp; convert</div>
+    <a href="url.html">🔗 URL</a>
+    <a href="base64.html">📦 Base64</a>
     <a href="escape.html">\ Escape</a>
+    <a href="number.html">🔢 Number base</a>
+    <a href="case.html">Aa Text case</a>
+    <a href="image.html">🖼️ Image convert</a>
+    <div class="group">Security &amp; IDs</div>
+    <a href="jwt.html">🎫 JWT</a>
+    <a href="hash.html"># Hash</a>
+    <a href="uuid.html">🆔 UUID / ULID</a>
+    <div class="group">Time</div>
+    <a href="timestamp.html">🕐 Timestamp</a>
+    <a href="cron.html">⏰ Cron</a>
     <a href="hijri.html">🌙 Hijri Calendar</a>
+    <div class="group">Generate</div>
+    <a href="color.html">🎨 Color</a>
+    <a href="fake.html">🎲 Fake data</a>
+    <a href="qr.html">▦ QR code</a>
+    <div class="group">Fun</div>
     <a href="games.html">🎮 Games</a>
   </nav>
   <a class="gh" href="https://github.com/wahyuakbarwibowo/diff" target="_blank" rel="noopener" title="Source code on GitHub">
